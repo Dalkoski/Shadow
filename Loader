@@ -1,6 +1,4 @@
 local gameid = game.PlaceId
-if gameid == 80470429583287 then
-    loadstring("")()
-else
-    game:GetService("Players").LocalPlayer:Kick("Game not supported by Phantom")
+if gameid == 89469502395769 then
+    loadstring("https://raw.githubusercontent.com/Dalkoski/Games/refs/heads/main/KickALuckyBlock")()
 end
