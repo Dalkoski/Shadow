@@ -1,5 +1,4 @@
 local gameid = game.PlaceId
 if gameid == 89469502395769 then
-    local code = game:HttpGet("https://raw.githubusercontent.com/Dalkoski/Games/refs/heads/main/KickALuckyBlock")
-    loadstring(code)()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/Dalkoski/Games/refs/heads/main/KickALuckyBlock"))()
 end
