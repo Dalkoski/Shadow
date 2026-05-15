@@ -1,6 +1,6 @@
 --[[
 	╔══════════════════════════════════════════════════════════╗
-	║                    VaenHub v2.4                          ║
+	║                    VaenHub v2.5                          ║
 	║       Final polish + spec fixes — by Dalkoski            ║
 	╚══════════════════════════════════════════════════════════╝
 ]]
@@ -48,7 +48,7 @@ local RADIUS = 8
 --==============================================================
 -- ROOT + FORWARD DECLS
 --==============================================================
-local VaenHub = { Version = "2.4.0", Flags = {}, Windows = {} }
+local VaenHub = { Version = "2.5.0", Flags = {}, Windows = {} }
 local Window = {}
 local Tab = {}
 local Elem = {}
@@ -141,7 +141,7 @@ function VaenHub:CreateWindow(cfg)
 		_protect = cfg.Protect or {},
 		_configSave = cfg.Config or {},
 		_name = cfg.Name or "VaenHub",
-		_version = cfg.Version or "v2.4",
+		_version = cfg.Version or "v2.5",
 		_currentTab = nil,
 		_tabOrder = 0,
 	}, {__index = Window})
@@ -245,26 +245,27 @@ function Window:_SelectTab(tab)
 		local sel = (t == tab)
 		t._page.Visible = sel
 		if sel then
+			t._button.BackgroundColor3 = Color3.fromRGB(38, 32, 64)
 			tween(t._button, 0.2, {BackgroundTransparency = 0})
-			if t._gradient then t._gradient.Transparency = NumberSequence.new(0) end
-			tween(t._buttonLabel, 0.2, {TextColor3 = THEME.AccentEnd})
+			if t._gradient then t._gradient.Transparency = NumberSequence.new(1) end
+			tween(t._buttonLabel, 0.2, {TextColor3 = Color3.fromRGB(255, 255, 255)})
 			if t._buttonIcon then
 				if t._buttonIcon:IsA("ImageLabel") then
-					tween(t._buttonIcon, 0.2, {ImageColor3 = THEME.AccentEnd})
+					tween(t._buttonIcon, 0.2, {ImageColor3 = Color3.fromRGB(255, 255, 255)})
 				else
-					tween(t._buttonIcon, 0.2, {TextColor3 = THEME.AccentEnd})
+					tween(t._buttonIcon, 0.2, {TextColor3 = Color3.fromRGB(255, 255, 255)})
 				end
 			end
-			if t._buttonStroke then t._buttonStroke.Transparency = 0.5 end
+			if t._buttonStroke then t._buttonStroke.Transparency = 1 end
 		else
 			tween(t._button, 0.2, {BackgroundTransparency = 1})
 			if t._gradient then t._gradient.Transparency = NumberSequence.new(1) end
-			tween(t._buttonLabel, 0.2, {TextColor3 = THEME.TextDim})
+			tween(t._buttonLabel, 0.2, {TextColor3 = Color3.fromRGB(140, 140, 155)})
 			if t._buttonIcon then
 				if t._buttonIcon:IsA("ImageLabel") then
-					tween(t._buttonIcon, 0.2, {ImageColor3 = THEME.TextDim})
+					tween(t._buttonIcon, 0.2, {ImageColor3 = Color3.fromRGB(140, 140, 155)})
 				else
-					tween(t._buttonIcon, 0.2, {TextColor3 = THEME.TextDim})
+					tween(t._buttonIcon, 0.2, {TextColor3 = Color3.fromRGB(140, 140, 155)})
 				end
 			end
 			if t._buttonStroke then t._buttonStroke.Transparency = 1 end
@@ -632,6 +633,7 @@ function VaenHub:_BuildWindow(win)
 	}, gui)
 	corner(main, 12)
 	stroke(main, Color3.fromRGB(255,255,255), 0.9)
+	gradient(main, Color3.fromRGB(12, 10, 20), Color3.fromRGB(24, 18, 38), 90)
 	win._main = main
 
 	-- Phantom V watermark
@@ -743,10 +745,14 @@ function VaenHub:_BuildWindow(win)
 		return b
 	end
 
-	local closeBtn = topBtn("Close", GLYPHS.close, -14, 14)
-	local miniBtn  = topBtn("Mini",  GLYPHS.min,   -44, 16)
+	local searchBtn = topBtn("Search",   GLYPHS.search, -134, 16)
+	local cogBtn    = topBtn("Settings", GLYPHS.gear,   -104, 16)
+	local miniBtn   = topBtn("Mini",     GLYPHS.min,    -74,  18)
+	local closeBtn  = topBtn("Close",    GLYPHS.close,  -14,  15)
 	closeBtn.MouseButton1Click:Connect(function() win:Destroy() end)
 	miniBtn.MouseButton1Click:Connect(function() win:Minimise() end)
+	searchBtn.MouseButton1Click:Connect(function() end)
+	cogBtn.MouseButton1Click:Connect(function() end)
 
 	-- TABBAR
 	local tabBar = new("Frame", {
@@ -1286,8 +1292,8 @@ VaenHub._Builders.Status = function(self, elem)
 	}, f)
 	local metric = new("TextLabel", {
 		AnchorPoint = Vector2.new(1, 0.5),
-		Size = UDim2.fromOffset(100, 38),
-		Position = UDim2.new(1, -14, 0.5, 0),
+		Size = UDim2.fromOffset(100, 34),
+		Position = UDim2.new(1, -12, 0.5, 0),
 		BackgroundTransparency = 1,
 		Text = "",
 		Font = Enum.Font.GothamMedium,
