@@ -1,1559 +1,2543 @@
 --[[
-    Phantom UI Library v3
-    Używa Rayfieldowego GUI asseta (wygląd identyczny jak Rayfield),
-    ale z czystym kodem — bez analytics, key system, Discord prompts,
-    build warnings, konfiguracji, drag bar itp.
+	╔══════════════════════════════════════════════════════════╗
+	║                      VaenHub v2.0                        ║
+	║          Modern Roblox UI Library by Dalkoski            ║
+	╚══════════════════════════════════════════════════════════╝
 
-    API:
-        local Phantom = loadstring(game:HttpGet("..."))()
-        local Window = Phantom:CreateWindow({
-            Name = "Title", LoadingTitle = "Phantom", LoadingSubtitle = "by Me",
-            Theme = "Default", Keybind = "K"
-        })
-        local Tab = Window:CreateTab("Main", 0)
-        Tab:CreateSection("Section")
-        Tab:CreateButton({  Name = "Btn",    Callback = function() end })
-        Tab:CreateToggle({  Name = "Tog",    CurrentValue = false, Flag = "t1", Callback = function(v) end })
-        Tab:CreateSlider({  Name = "Sld",    Range = {0,100}, Increment = 1, Suffix = "ms",
-                            CurrentValue = 50, Flag = "s1", Callback = function(v) end })
-        Tab:CreateInput({   Name = "Inp",    CurrentValue = "", PlaceholderText = "...",
-                            RemoveTextAfterFocusLost = false, Flag = "i1", Callback = function(t) end })
-        Tab:CreateKeybind({ Name = "Bind",   CurrentKeybind = "F", Flag = "k1", Callback = function() end })
-        Tab:CreateDropdown({Name = "Drop",   Options = {"A","B"}, CurrentOption = {"A"},
-                            MultipleOptions = false, Flag = "d1", Callback = function(v) end })
-        Tab:CreateColorPicker({ Name = "Clr", Color = Color3.new(1,1,1), Flag = "c1",
-                                Callback = function(c) end })
-        Tab:CreateLabel("text")
-        Tab:CreateParagraph({ Title = "T", Content = "C" })
-        Phantom:Notify({ Title = "Hi", Content = "...", Duration = 4 })
-        Phantom.Flags["t1"]:Set(true)
-        Window:Destroy()
+	USAGE:
+		local VaenHub = loadstring(game:HttpGet("YOUR_RAW_URL"))()
+		local Window = VaenHub:CreateWindow({ ... })
+		local Tab = Window:Tab("Main", "bolt")
+		Tab:Toggle("Auto Farm"):Default(true):OnChange(function(v) end)
+
+	STRUCTURE (top = most edited, bottom = internals):
+		1. PUBLIC API           — CreateWindow, Notify, Destroy
+		2. WINDOW METHODS       — Tab, Protect, OnUnload, LoadConfig
+		3. TAB METHODS          — Toggle, Slider, Dropdown, etc (chainable)
+		4. CHAINABLE BUILDERS   — Default, Range, OnChange, Flag, Set
+		5. PROTECTION LAYER     — AntiAFK, AntiKick, AutoRejoin, ServerHop
+		6. KEY SYSTEM           — full-screen blur + glass card
+		7. THEME ENGINE         — gradient/color/preset handling
+		8. CONFIG SAVE/LOAD     — profiles, flag registry
+		9. ANIMATIONS           — tween helpers
+		10. UI BUILDERS         — internal frame creation
+		11. UTILITIES           — safe calls, asset helpers
+		12. INIT                — boot sequence
 ]]
 
-------------------------------------------------------------
--- Services
-------------------------------------------------------------
-local UserInputService = game:GetService("UserInputService")
-local TweenService     = game:GetService("TweenService")
-local CoreGui          = game:GetService("CoreGui")
-local Players          = game:GetService("Players")
-local RunService       = game:GetService("RunService")
-local HttpService      = game:GetService("HttpService")
-local LocalPlayer      = Players.LocalPlayer
+--==============================================================
+-- SERVICES
+--==============================================================
+local function getService(name)
+	local svc = game:GetService(name)
+	return cloneref and cloneref(svc) or svc
+end
 
-------------------------------------------------------------
--- Library
-------------------------------------------------------------
-local Phantom = {}
-Phantom.Flags = {}
-Phantom.Theme = {
-    Default = {
-        TextColor                     = Color3.fromRGB(240, 240, 240),
-        Background                    = Color3.fromRGB(25, 25, 25),
-        Topbar                        = Color3.fromRGB(34, 34, 34),
-        Shadow                        = Color3.fromRGB(20, 20, 20),
-        NotificationBackground        = Color3.fromRGB(20, 20, 20),
-        NotificationActionsBackground = Color3.fromRGB(230, 230, 230),
-        TabBackground                 = Color3.fromRGB(80, 80, 80),
-        TabStroke                     = Color3.fromRGB(85, 85, 85),
-        TabBackgroundSelected         = Color3.fromRGB(210, 210, 210),
-        TabTextColor                  = Color3.fromRGB(240, 240, 240),
-        SelectedTabTextColor          = Color3.fromRGB(50, 50, 50),
-        ElementBackground             = Color3.fromRGB(35, 35, 35),
-        ElementBackgroundHover        = Color3.fromRGB(40, 40, 40),
-        SecondaryElementBackground    = Color3.fromRGB(25, 25, 25),
-        ElementStroke                 = Color3.fromRGB(50, 50, 50),
-        SecondaryElementStroke        = Color3.fromRGB(40, 40, 40),
-        SliderBackground              = Color3.fromRGB(50, 138, 220),
-        SliderProgress                = Color3.fromRGB(50, 138, 220),
-        SliderStroke                  = Color3.fromRGB(58, 163, 255),
-        ToggleBackground              = Color3.fromRGB(30, 30, 30),
-        ToggleEnabled                 = Color3.fromRGB(0, 146, 214),
-        ToggleDisabled                = Color3.fromRGB(100, 100, 100),
-        ToggleEnabledStroke           = Color3.fromRGB(0, 170, 255),
-        ToggleDisabledStroke          = Color3.fromRGB(125, 125, 125),
-        ToggleEnabledOuterStroke      = Color3.fromRGB(100, 100, 100),
-        ToggleDisabledOuterStroke     = Color3.fromRGB(65, 65, 65),
-        DropdownSelected              = Color3.fromRGB(40, 40, 40),
-        DropdownUnselected            = Color3.fromRGB(30, 30, 30),
-        InputBackground               = Color3.fromRGB(30, 30, 30),
-        InputStroke                   = Color3.fromRGB(65, 65, 65),
-        PlaceholderColor              = Color3.fromRGB(178, 178, 178),
-    },
-    Ocean = {
-        TextColor                     = Color3.fromRGB(230, 240, 240),
-        Background                    = Color3.fromRGB(20, 30, 30),
-        Topbar                        = Color3.fromRGB(25, 40, 40),
-        Shadow                        = Color3.fromRGB(15, 20, 20),
-        NotificationBackground        = Color3.fromRGB(25, 35, 35),
-        NotificationActionsBackground = Color3.fromRGB(230, 240, 240),
-        TabBackground                 = Color3.fromRGB(40, 60, 60),
-        TabStroke                     = Color3.fromRGB(50, 70, 70),
-        TabBackgroundSelected         = Color3.fromRGB(100, 180, 180),
-        TabTextColor                  = Color3.fromRGB(210, 230, 230),
-        SelectedTabTextColor          = Color3.fromRGB(20, 50, 50),
-        ElementBackground             = Color3.fromRGB(30, 50, 50),
-        ElementBackgroundHover        = Color3.fromRGB(40, 60, 60),
-        SecondaryElementBackground    = Color3.fromRGB(30, 45, 45),
-        ElementStroke                 = Color3.fromRGB(45, 70, 70),
-        SecondaryElementStroke        = Color3.fromRGB(40, 65, 65),
-        SliderBackground              = Color3.fromRGB(0, 110, 110),
-        SliderProgress                = Color3.fromRGB(0, 140, 140),
-        SliderStroke                  = Color3.fromRGB(0, 160, 160),
-        ToggleBackground              = Color3.fromRGB(30, 50, 50),
-        ToggleEnabled                 = Color3.fromRGB(0, 130, 130),
-        ToggleDisabled                = Color3.fromRGB(70, 90, 90),
-        ToggleEnabledStroke           = Color3.fromRGB(0, 160, 160),
-        ToggleDisabledStroke          = Color3.fromRGB(85, 105, 105),
-        ToggleEnabledOuterStroke      = Color3.fromRGB(50, 100, 100),
-        ToggleDisabledOuterStroke     = Color3.fromRGB(45, 65, 65),
-        DropdownSelected              = Color3.fromRGB(30, 60, 60),
-        DropdownUnselected            = Color3.fromRGB(25, 40, 40),
-        InputBackground               = Color3.fromRGB(30, 50, 50),
-        InputStroke                   = Color3.fromRGB(50, 70, 70),
-        PlaceholderColor              = Color3.fromRGB(140, 160, 160),
-    },
-    Amethyst = {
-        TextColor                     = Color3.fromRGB(240, 240, 240),
-        Background                    = Color3.fromRGB(30, 20, 40),
-        Topbar                        = Color3.fromRGB(40, 25, 50),
-        Shadow                        = Color3.fromRGB(20, 15, 30),
-        NotificationBackground        = Color3.fromRGB(35, 20, 40),
-        NotificationActionsBackground = Color3.fromRGB(240, 240, 250),
-        TabBackground                 = Color3.fromRGB(60, 40, 80),
-        TabStroke                     = Color3.fromRGB(70, 45, 90),
-        TabBackgroundSelected         = Color3.fromRGB(180, 140, 200),
-        TabTextColor                  = Color3.fromRGB(230, 230, 240),
-        SelectedTabTextColor          = Color3.fromRGB(50, 20, 50),
-        ElementBackground             = Color3.fromRGB(45, 30, 60),
-        ElementBackgroundHover        = Color3.fromRGB(50, 35, 70),
-        SecondaryElementBackground    = Color3.fromRGB(40, 30, 55),
-        ElementStroke                 = Color3.fromRGB(70, 50, 85),
-        SecondaryElementStroke        = Color3.fromRGB(65, 45, 80),
-        SliderBackground              = Color3.fromRGB(100, 60, 150),
-        SliderProgress                = Color3.fromRGB(130, 80, 180),
-        SliderStroke                  = Color3.fromRGB(150, 100, 200),
-        ToggleBackground              = Color3.fromRGB(45, 30, 55),
-        ToggleEnabled                 = Color3.fromRGB(120, 60, 150),
-        ToggleDisabled                = Color3.fromRGB(94, 47, 117),
-        ToggleEnabledStroke           = Color3.fromRGB(140, 80, 170),
-        ToggleDisabledStroke          = Color3.fromRGB(124, 71, 150),
-        ToggleEnabledOuterStroke      = Color3.fromRGB(90, 40, 120),
-        ToggleDisabledOuterStroke     = Color3.fromRGB(80, 50, 110),
-        DropdownSelected              = Color3.fromRGB(50, 35, 70),
-        DropdownUnselected            = Color3.fromRGB(35, 25, 50),
-        InputBackground               = Color3.fromRGB(45, 30, 60),
-        InputStroke                   = Color3.fromRGB(80, 50, 110),
-        PlaceholderColor              = Color3.fromRGB(178, 150, 200),
-    },
-    Light = {
-        TextColor                     = Color3.fromRGB(40, 40, 40),
-        Background                    = Color3.fromRGB(245, 245, 245),
-        Topbar                        = Color3.fromRGB(230, 230, 230),
-        Shadow                        = Color3.fromRGB(200, 200, 200),
-        NotificationBackground        = Color3.fromRGB(250, 250, 250),
-        NotificationActionsBackground = Color3.fromRGB(240, 240, 240),
-        TabBackground                 = Color3.fromRGB(235, 235, 235),
-        TabStroke                     = Color3.fromRGB(215, 215, 215),
-        TabBackgroundSelected         = Color3.fromRGB(255, 255, 255),
-        TabTextColor                  = Color3.fromRGB(80, 80, 80),
-        SelectedTabTextColor          = Color3.fromRGB(0, 0, 0),
-        ElementBackground             = Color3.fromRGB(240, 240, 240),
-        ElementBackgroundHover        = Color3.fromRGB(225, 225, 225),
-        SecondaryElementBackground    = Color3.fromRGB(235, 235, 235),
-        ElementStroke                 = Color3.fromRGB(210, 210, 210),
-        SecondaryElementStroke        = Color3.fromRGB(210, 210, 210),
-        SliderBackground              = Color3.fromRGB(150, 180, 220),
-        SliderProgress                = Color3.fromRGB(100, 150, 200),
-        SliderStroke                  = Color3.fromRGB(120, 170, 220),
-        ToggleBackground              = Color3.fromRGB(220, 220, 220),
-        ToggleEnabled                 = Color3.fromRGB(0, 146, 214),
-        ToggleDisabled                = Color3.fromRGB(150, 150, 150),
-        ToggleEnabledStroke           = Color3.fromRGB(0, 170, 255),
-        ToggleDisabledStroke          = Color3.fromRGB(170, 170, 170),
-        ToggleEnabledOuterStroke      = Color3.fromRGB(100, 100, 100),
-        ToggleDisabledOuterStroke     = Color3.fromRGB(180, 180, 180),
-        DropdownSelected              = Color3.fromRGB(230, 230, 230),
-        DropdownUnselected            = Color3.fromRGB(220, 220, 220),
-        InputBackground               = Color3.fromRGB(240, 240, 240),
-        InputStroke                   = Color3.fromRGB(180, 180, 180),
-        PlaceholderColor              = Color3.fromRGB(140, 140, 140),
-    },
+local UserInputService = getService("UserInputService")
+local TweenService     = getService("TweenService")
+local Players          = getService("Players")
+local CoreGui          = getService("CoreGui")
+local HttpService      = getService("HttpService")
+local RunService       = getService("RunService")
+local Lighting         = getService("Lighting")
+local TeleportService  = getService("TeleportService")
+local GuiService       = getService("GuiService")
+
+local LocalPlayer = Players.LocalPlayer
+
+--==============================================================
+-- LIBRARY ROOT
+--==============================================================
+local VaenHub = {
+	Version  = "2.0.0",
+	Flags    = {},
+	Windows  = {},
+	_destroyed = false,
 }
 
-------------------------------------------------------------
--- Load Rayfield's interface asset (the actual GUI)
-------------------------------------------------------------
-local RayfieldAssetId = 10804731440
-local InterfaceBuild  = "UU2NX"
+--==============================================================
+-- 1. PUBLIC API
+--==============================================================
 
-local function loadInterface()
-    local ok, result = pcall(function()
-        return game:GetObjects("rbxassetid://" .. RayfieldAssetId)[1]
-    end)
-    if not ok or not result then
-        error("[Phantom] Failed to load interface asset: " .. tostring(result))
-    end
-    return result
+-- Creates a new window. Returns a Window object.
+function VaenHub:CreateWindow(config)
+	config = config or {}
+	local window = setmetatable({
+		_config       = config,
+		_tabs         = {},
+		_elements     = {},
+		_connections  = {},
+		_unloadHooks  = {},
+		_currentTab   = nil,
+		_minimised    = false,
+		_hidden       = false,
+		_theme        = self:_ResolveTheme(config.Theme),
+		_keybinds     = self:_ResolveKeybinds(config.Keybinds),
+		_protect      = config.Protect or {},
+		_keySystem    = config.KeySystem,
+		_configSave   = config.Config or {},
+		_name         = config.Name or "VaenHub",
+		_loadingTitle = config.LoadingTitle or "VaenHub",
+		_loadingSub   = config.LoadingSubtitle or "by Dalkoski",
+	}, { __index = self._WindowMeta })
+
+	-- Key system check before any UI shows
+	if window._keySystem and window._keySystem.Enabled then
+		local passed = self:_RunKeySystem(window)
+		if not passed then
+			window:Destroy()
+			return nil
+		end
+	end
+
+	-- Build the UI
+	self:_BuildWindow(window)
+
+	-- Run protection layer
+	if window._protect then
+		window:Protect(window._protect)
+	end
+
+	-- Load config if enabled
+	if window._configSave.Enabled then
+		task.delay(1, function()
+			window:LoadConfig(window._configSave.Profile or "default")
+		end)
+	end
+
+	table.insert(self.Windows, window)
+	return window
 end
 
-local Rayfield = loadInterface()
-Rayfield.Enabled = false
-
--- Parent safely (CoreGui / gethui / PlayerGui fallback)
-do
-    local function tryGethui()
-        local ok, h = pcall(function() return gethui() end)
-        if ok then return h end
-    end
-    local target = tryGethui()
-    if not target then
-        if syn and syn.protect_gui then
-            pcall(syn.protect_gui, Rayfield)
-        end
-        local ok = pcall(function() return CoreGui:GetChildren() end)
-        if ok then
-            target = CoreGui
-        else
-            target = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-                  or LocalPlayer:WaitForChild("PlayerGui")
-        end
-    end
-    Rayfield.Parent = target
+-- Sends a notification to the user. Auto-stacks with limit.
+function VaenHub:Notify(data)
+	data = data or {}
+	self:_QueueNotification({
+		Title    = data.Title or "Notification",
+		Content  = data.Content or "",
+		Duration = data.Duration or 5,
+		Icon     = data.Icon,
+		Type     = data.Type or "default", -- default, success, warning, error
+	})
 end
 
--- Hide old Phantom/Rayfield instances
-for _, gui in ipairs((Rayfield.Parent):GetChildren()) do
-    if gui ~= Rayfield and (gui.Name == Rayfield.Name or gui.Name == "Rayfield" or gui.Name:match("^Phantom")) then
-        gui.Enabled = false
-        gui.Name = gui.Name .. "_old"
-    end
+-- Destroys all windows and disconnects everything.
+function VaenHub:Destroy()
+	self._destroyed = true
+	for _, window in ipairs(self.Windows) do
+		pcall(function() window:Destroy() end)
+	end
+	self.Windows = {}
+	self.Flags = {}
 end
 
-------------------------------------------------------------
--- Rayfield asset image IDs (cached so themes/etc keep working)
-------------------------------------------------------------
--- Asset IDs that ship inside the rbxm. Most are already wired up internally;
--- we just leave them alone.
-
-------------------------------------------------------------
--- Constants & references into the asset
-------------------------------------------------------------
-local Main         = Rayfield.Main
-local MPrompt      = Rayfield:FindFirstChild("Prompt")
-local Topbar       = Main.Topbar
-local Elements     = Main.Elements
-local LoadingFrame = Main.LoadingFrame
-local TabList      = Main.TabList
-local Notifications = Rayfield.Notifications
-
-Rayfield.DisplayOrder = 100
-
-local SelectedTheme   = Phantom.Theme.Default
-local activeWindow    = nil
-local themeListeners  = {}
-
-local TWEEN_FAST = TweenInfo.new(0.18, Enum.EasingStyle.Quad,  Enum.EasingDirection.Out)
-local TWEEN_MED  = TweenInfo.new(0.4,  Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-local TWEEN_SLOW = TweenInfo.new(0.6,  Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)
-
-------------------------------------------------------------
--- Helpers
-------------------------------------------------------------
-local function tween(obj, info, props)
-    local ok, t = pcall(TweenService.Create, TweenService, obj, info, props)
-    if ok and t then t:Play(); return t end
+-- Returns an element by flag name from any window.
+function VaenHub:Get(flag)
+	return self.Flags[flag]
 end
 
-local function fireThemeListeners()
-    for _, fn in ipairs(themeListeners) do task.spawn(fn) end
+-- Returns true if the UI is currently visible.
+function VaenHub:IsVisible()
+	for _, win in ipairs(self.Windows) do
+		if not win._hidden then return true end
+	end
+	return false
 end
 
-local function applyThemeToAsset(theme)
-    SelectedTheme = theme
-    Main.BackgroundColor3                   = theme.Background
-    Main.Topbar.BackgroundColor3            = theme.Topbar
-    Main.Topbar.CornerRepair.BackgroundColor3 = theme.Topbar
-    Main.Shadow.Image.ImageColor3           = theme.Shadow
-    Main.Topbar.ChangeSize.ImageColor3      = theme.TextColor
-    Main.Topbar.Hide.ImageColor3            = theme.TextColor
-    if Topbar:FindFirstChild("Search")   then Topbar.Search.ImageColor3   = theme.TextColor end
-    if Topbar:FindFirstChild("Settings") then
-        Topbar.Settings.ImageColor3 = theme.TextColor
-        Topbar.Divider.BackgroundColor3 = theme.ElementStroke
-        Topbar.Settings.Visible = false  -- ukrywamy Rayfield settings tab button
-    end
-    if Main:FindFirstChild("Search") then
-        Main.Search.BackgroundColor3 = theme.TextColor
-        Main.Search.Shadow.ImageColor3 = theme.TextColor
-        Main.Search.Search.ImageColor3 = theme.TextColor
-        Main.Search.Input.PlaceholderColor3 = theme.TextColor
-        Main.Search.UIStroke.Color = theme.SecondaryElementStroke
-    end
-
-    for _, descendant in ipairs(Rayfield:GetDescendants()) do
-        if descendant.Parent and descendant.Parent.Parent ~= Notifications
-        and (descendant:IsA("TextLabel") or descendant:IsA("TextBox")) then
-            descendant.TextColor3 = theme.TextColor
-        end
-    end
-
-    for _, tabPage in ipairs(Elements:GetChildren()) do
-        for _, elem in ipairs(tabPage:GetChildren()) do
-            if elem:IsA("Frame")
-               and elem.Name ~= "Placeholder"
-               and elem.Name ~= "SectionSpacing"
-               and elem.Name ~= "Divider"
-               and elem.Name ~= "SectionTitle"
-               and elem.Name ~= "SearchTitle" then
-                elem.BackgroundColor3 = theme.ElementBackground
-                if elem:FindFirstChild("UIStroke") then
-                    elem.UIStroke.Color = theme.ElementStroke
-                end
-            end
-        end
-    end
-
-    fireThemeListeners()
+-- Toggle UI visibility for all windows.
+function VaenHub:SetVisibility(visible)
+	for _, win in ipairs(self.Windows) do
+		if visible then win:Show() else win:Hide() end
+	end
 end
 
-local function changeTheme(name)
-    local t = type(name) == "table" and name or Phantom.Theme[name]
-    if t then applyThemeToAsset(t) end
+
+--==============================================================
+-- 2. WINDOW METHODS
+--==============================================================
+VaenHub._WindowMeta = {}
+local Window = VaenHub._WindowMeta
+
+-- Creates a new tab. Returns a Tab object for chaining elements.
+function Window:Tab(name, icon)
+	local tab = setmetatable({
+		_name     = name,
+		_icon     = icon,
+		_window   = self,
+		_elements = {},
+		_button   = nil,
+		_page     = nil,
+	}, { __index = VaenHub._TabMeta })
+
+	VaenHub:_BuildTab(self, tab)
+	table.insert(self._tabs, tab)
+
+	-- First tab is auto-selected
+	if #self._tabs == 1 then
+		self:_SelectTab(tab)
+	end
+
+	return tab
 end
 
-------------------------------------------------------------
--- Drag (lightweight)
-------------------------------------------------------------
-local function makeDraggable(frame, handle)
-    local dragging, startPos, startInput
-    handle.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            startPos = frame.Position
-            startInput = input.Position
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
-            end)
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if not dragging then return end
-        if input.UserInputType ~= Enum.UserInputType.MouseMovement
-        and input.UserInputType ~= Enum.UserInputType.Touch then return end
-        local delta = input.Position - startInput
-        frame.Position = UDim2.new(
-            startPos.X.Scale, startPos.X.Offset + delta.X,
-            startPos.Y.Scale, startPos.Y.Offset + delta.Y
-        )
-    end)
+-- Enables protection features. Pass a table of booleans.
+function Window:Protect(opts)
+	opts = opts or {}
+	if opts.HideUI       then VaenHub:_HideFromCoreGui(self) end
+	if opts.AntiAFK      then VaenHub:_EnableAntiAFK(self) end
+	if opts.AntiKick     then VaenHub:_EnableAntiKick(self) end
+	if opts.AntiLag      then VaenHub:_EnableAntiLag(self) end
+	if opts.AutoRejoin   then VaenHub:_EnableAutoRejoin(self) end
+	if opts.ServerHop   and opts.ServerHop.Enabled then
+		VaenHub:_SetupServerHop(self, opts.ServerHop)
+	end
 end
 
-------------------------------------------------------------
--- Color helpers
-------------------------------------------------------------
-local function packColor(c) return { R = c.R*255, G = c.G*255, B = c.B*255 } end
-local function unpackColor(t) return Color3.fromRGB(t.R, t.G, t.B) end
-
-------------------------------------------------------------
--- :Notify
-------------------------------------------------------------
-function Phantom:Notify(data)
-    task.spawn(function()
-        local n = Notifications.Template:Clone()
-        n.Name = data.Title or "Notification"
-        n.Parent = Notifications
-        n.LayoutOrder = #Notifications:GetChildren()
-        n.Visible = false
-
-        n.Title.Text = data.Title or "Title"
-        n.Description.Text = data.Content or ""
-        n.Icon.Image = data.Image and ("rbxassetid://" .. tostring(data.Image)) or ""
-
-        n.Title.TextColor3       = SelectedTheme.TextColor
-        n.Description.TextColor3 = SelectedTheme.TextColor
-        n.BackgroundColor3       = SelectedTheme.Background
-        n.UIStroke.Color         = SelectedTheme.TextColor
-        n.Icon.ImageColor3       = SelectedTheme.TextColor
-
-        n.BackgroundTransparency = 1
-        n.Title.TextTransparency = 1
-        n.Description.TextTransparency = 1
-        n.UIStroke.Transparency = 1
-        n.Shadow.ImageTransparency = 1
-        n.Icon.ImageTransparency = 1
-        n.Icon.BackgroundTransparency = 1
-        n.Size = UDim2.new(1, 0, 0, 800)
-
-        task.wait()
-        n.Visible = true
-
-        local bounds = { n.Title.TextBounds.Y, n.Description.TextBounds.Y }
-        n.Size = UDim2.new(1, -60, 0, -Notifications:FindFirstChild("UIListLayout").Padding.Offset)
-        n.Icon.Size = UDim2.new(0, 32, 0, 32)
-        n.Icon.Position = UDim2.new(0, 20, 0.5, 0)
-
-        tween(n, TweenInfo.new(0.6, Enum.EasingStyle.Exponential), {
-            Size = UDim2.new(1, 0, 0, math.max(bounds[1] + bounds[2] + 31, 60))
-        })
-        task.wait(0.15)
-        tween(n,             TWEEN_MED, { BackgroundTransparency = 0.45 })
-        tween(n.Title,       TWEEN_MED, { TextTransparency = 0 })
-        task.wait(0.05)
-        tween(n.Icon,        TWEEN_MED, { ImageTransparency = 0 })
-        task.wait(0.05)
-        tween(n.Description, TWEEN_MED, { TextTransparency = 0.35 })
-        tween(n.UIStroke,    TWEEN_MED, { Transparency = 0.95 })
-        tween(n.Shadow,      TWEEN_MED, { ImageTransparency = 0.82 })
-
-        local dur = data.Duration or math.clamp((#n.Description.Text * 0.1) + 2.5, 3, 10)
-        task.wait(dur)
-
-        n.Icon.Visible = false
-        tween(n,             TWEEN_MED, { BackgroundTransparency = 1 })
-        tween(n.UIStroke,    TWEEN_MED, { Transparency = 1 })
-        tween(n.Shadow,      TWEEN_MED, { ImageTransparency = 1 })
-        tween(n.Title,       TWEEN_MED, { TextTransparency = 1 })
-        tween(n.Description, TWEEN_MED, { TextTransparency = 1 })
-        tween(n, TweenInfo.new(1, Enum.EasingStyle.Exponential), { Size = UDim2.new(1, -90, 0, 0) })
-        task.wait(1)
-        tween(n, TweenInfo.new(1, Enum.EasingStyle.Exponential), {
-            Size = UDim2.new(1, -90, 0, -Notifications:FindFirstChild("UIListLayout").Padding.Offset),
-        })
-        n.Visible = false
-        n:Destroy()
-    end)
+-- Registers a callback to run when the window is destroyed.
+function Window:OnUnload(callback)
+	table.insert(self._unloadHooks, callback)
 end
 
-------------------------------------------------------------
--- :CreateWindow
-------------------------------------------------------------
-function Phantom:CreateWindow(opts)
-    opts = opts or {}
-    local Window = {}
-    activeWindow = Window
-
-    -- Theme
-    if opts.Theme then
-        local ok, _ = pcall(changeTheme, opts.Theme)
-        if not ok then changeTheme("Default") end
-    else
-        changeTheme("Default")
-    end
-
-    -- Title / subtitle / loading
-    Topbar.Title.Text = opts.Name or "Phantom"
-    LoadingFrame.Title.Text    = opts.LoadingTitle or "Phantom"
-    LoadingFrame.Subtitle.Text = opts.LoadingSubtitle or "by you"
-    LoadingFrame.Version.Text  = "Phantom UI"
-
-    -- Topbar icon
-    if Topbar:FindFirstChild("Icon") then
-        if opts.Icon and opts.Icon ~= 0 then
-            Topbar.Icon.Visible = true
-            Topbar.Title.Position = UDim2.new(0, 47, 0.5, 0)
-            Topbar.Icon.Image = "rbxassetid://" .. tostring(opts.Icon)
-        else
-            Topbar.Icon.Visible = false
-            Topbar.Title.Position = UDim2.new(0, 19, 0.5, 0)
-        end
-    end
-
-    -- Hide drag bar (uncalled-for in our case)
-    local dragBar = Rayfield:FindFirstChild("Drag")
-    if dragBar then dragBar.Visible = false end
-
-    -- Hide the settings cog (Rayfield's own settings tab)
-    if Topbar:FindFirstChild("Settings") then Topbar.Settings.Visible = false end
-
-    -- Setup initial main frame state for animations
-    Main.Size = UDim2.new(0, 420, 0, 100)
-    Main.Visible = true
-    Main.BackgroundTransparency = 1
-    if Main:FindFirstChild("Notice") then Main.Notice.Visible = false end
-    Main.Shadow.Image.ImageTransparency = 1
-
-    LoadingFrame.Title.TextTransparency = 1
-    LoadingFrame.Subtitle.TextTransparency = 1
-    LoadingFrame.Version.TextTransparency = 1
-
-    Topbar.Visible = false
-    Elements.Visible = false
-    LoadingFrame.Visible = true
-
-    Notifications.Template.Visible = false
-    Notifications.Visible = true
-    Rayfield.Enabled = true
-
-    -- Drag
-    makeDraggable(Main, Topbar)
-
-    -- Reset tab buttons
-    for _, tb in ipairs(TabList:GetChildren()) do
-        if tb:IsA("Frame") and tb.Name ~= "Placeholder" then
-            tb.BackgroundTransparency = 1
-            tb.Title.TextTransparency = 1
-            tb.Image.ImageTransparency = 1
-            tb.UIStroke.Transparency = 1
-        end
-    end
-
-    -- Loading animation
-    task.spawn(function()
-        task.wait(0.5)
-        tween(Main, TWEEN_SLOW, { BackgroundTransparency = 0 })
-        tween(Main.Shadow.Image, TWEEN_SLOW, { ImageTransparency = 0.6 })
-        task.wait(0.1)
-        tween(LoadingFrame.Title,    TWEEN_SLOW, { TextTransparency = 0 })
-        task.wait(0.05)
-        tween(LoadingFrame.Subtitle, TWEEN_SLOW, { TextTransparency = 0 })
-        task.wait(0.05)
-        tween(LoadingFrame.Version,  TWEEN_SLOW, { TextTransparency = 0 })
-    end)
-
-    -- Force search invisible (we don't use it)
-    if Main:FindFirstChild("Search") then Main.Search.Visible = false end
-    if Topbar:FindFirstChild("Search") then Topbar.Search.Visible = false end
-
-    Elements.Template.LayoutOrder = 100000
-    Elements.Template.Visible = false
-    Elements.UIPageLayout.FillDirection = Enum.FillDirection.Horizontal
-    Elements.UIPageLayout.ScrollWheelInputEnabled = false
-    Elements.UIPageLayout.GamepadInputEnabled = false
-    Elements.UIPageLayout.TouchInputEnabled = false
-    TabList.Template.Visible = false
-
-    -- Visibility / keybind
-    local Minimized, Hidden, Debounce = false, false, false
-    local keyName = opts.Keybind or "K"
-    local toggleKeyCode = Enum.KeyCode[keyName] or Enum.KeyCode.K
-
-    local function setElementsVisible(show)
-        for _, tab in ipairs(Elements:GetChildren()) do
-            if tab:IsA("ScrollingFrame") and tab.Name ~= "Template" and tab.Name ~= "Placeholder" then
-                for _, el in ipairs(tab:GetChildren()) do
-                    if el:IsA("Frame") and el.Name ~= "SectionSpacing" and el.Name ~= "Placeholder" then
-                        if el.Name == "SectionTitle" then
-                            tween(el.Title, TWEEN_MED, { TextTransparency = show and 0.4 or 1 })
-                        elseif el.Name == "Divider" and el:FindFirstChild("Divider") then
-                            tween(el.Divider, TWEEN_MED, { BackgroundTransparency = show and 0.85 or 1 })
-                        else
-                            tween(el, TWEEN_MED, { BackgroundTransparency = show and 0 or 1 })
-                            if el:FindFirstChild("UIStroke") then
-                                tween(el.UIStroke, TWEEN_MED, { Transparency = show and 0 or 1 })
-                            end
-                            if el:FindFirstChild("Title") then
-                                tween(el.Title, TWEEN_MED, { TextTransparency = show and 0 or 1 })
-                            end
-                        end
-                        for _, ch in ipairs(el:GetChildren()) do
-                            if ch:IsA("Frame") or ch:IsA("TextLabel") or ch:IsA("TextBox")
-                            or ch:IsA("ImageLabel") or ch:IsA("ImageButton") then
-                                ch.Visible = show
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    local function setTabButtons(show)
-        for _, tb in ipairs(TabList:GetChildren()) do
-            if tb:IsA("Frame") and tb.Name ~= "Placeholder" then
-                if show then
-                    local active = tostring(Elements.UIPageLayout.CurrentPage) == tb.Title.Text
-                    tween(tb,          TWEEN_MED, { BackgroundTransparency = active and 0 or 0.7 })
-                    tween(tb.Image,    TWEEN_MED, { ImageTransparency      = active and 0 or 0.2 })
-                    tween(tb.Title,    TWEEN_MED, { TextTransparency       = active and 0 or 0.2 })
-                    tween(tb.UIStroke, TWEEN_MED, { Transparency           = active and 1 or 0.5 })
-                else
-                    tween(tb,          TWEEN_MED, { BackgroundTransparency = 1 })
-                    tween(tb.Image,    TWEEN_MED, { ImageTransparency = 1 })
-                    tween(tb.Title,    TWEEN_MED, { TextTransparency = 1 })
-                    tween(tb.UIStroke, TWEEN_MED, { Transparency = 1 })
-                end
-            end
-        end
-    end
-
-    local function hide()
-        if Debounce then return end
-        Debounce = true
-        Hidden = true
-
-        if MPrompt then
-            MPrompt.Title.TextColor3 = Color3.fromRGB(255,255,255)
-            MPrompt.Position = UDim2.new(0.5, 0, 0, -50)
-            MPrompt.Size = UDim2.new(0, 40, 0, 10)
-            MPrompt.BackgroundTransparency = 1
-            MPrompt.Title.TextTransparency = 1
-            MPrompt.Visible = true
-        end
-
-        tween(Main,                TWEEN_MED, { Size = UDim2.new(0, 470, 0, 0), BackgroundTransparency = 1 })
-        tween(Main.Topbar,         TWEEN_MED, { Size = UDim2.new(0, 470, 0, 45), BackgroundTransparency = 1 })
-        tween(Main.Topbar.Divider, TWEEN_MED, { BackgroundTransparency = 1 })
-        tween(Main.Topbar.CornerRepair, TWEEN_FAST, { BackgroundTransparency = 1 })
-        tween(Main.Topbar.Title,   TWEEN_MED, { TextTransparency = 1 })
-        tween(Main.Shadow.Image,   TWEEN_MED, { ImageTransparency = 1 })
-        tween(Topbar.UIStroke,     TWEEN_MED, { Transparency = 1 })
-
-        for _, btn in ipairs(Topbar:GetChildren()) do
-            if btn:IsA("ImageButton") then tween(btn, TWEEN_MED, { ImageTransparency = 1 }) end
-        end
-        setTabButtons(false)
-        setElementsVisible(false)
-        task.wait(0.5)
-        Main.Visible = false
-        Debounce = false
-    end
-
-    local function unhide()
-        if Debounce then return end
-        Debounce = true
-        Hidden = false
-
-        Main.Position = UDim2.new(0.5, 0, 0.5, 0)
-        Main.Visible = true
-        tween(Main,             TWEEN_MED, { Size = UDim2.new(0, 500, 0, 475), BackgroundTransparency = 0 })
-        tween(Main.Topbar,      TWEEN_MED, { Size = UDim2.new(0, 500, 0, 45),  BackgroundTransparency = 0 })
-        tween(Main.Shadow.Image,TWEEN_MED, { ImageTransparency = 0.6 })
-        tween(Main.Topbar.Divider,      TWEEN_MED, { BackgroundTransparency = 0 })
-        tween(Main.Topbar.CornerRepair, TWEEN_MED, { BackgroundTransparency = 0 })
-        tween(Main.Topbar.Title,        TWEEN_MED, { TextTransparency = 0 })
-
-        if MPrompt then
-            tween(MPrompt,       TWEEN_MED, { Position = UDim2.new(0.5,0,0,-50), Size = UDim2.new(0,40,0,10), BackgroundTransparency = 1 })
-            tween(MPrompt.Title, TWEEN_MED, { TextTransparency = 1 })
-            task.delay(0.5, function() MPrompt.Visible = false end)
-        end
-
-        for _, btn in ipairs(Topbar:GetChildren()) do
-            if btn:IsA("ImageButton") then
-                if btn.Name == "Icon" then
-                    tween(btn, TWEEN_MED, { ImageTransparency = 0 })
-                else
-                    tween(btn, TWEEN_MED, { ImageTransparency = 0.8 })
-                end
-            end
-        end
-        setTabButtons(true)
-        setElementsVisible(true)
-        task.wait(0.5)
-        Debounce = false
-    end
-
-    local function minimize()
-        if Debounce then return end
-        Debounce = true
-        Minimized = true
-        Topbar.ChangeSize.Image = "rbxassetid://11036884234"
-        Topbar.UIStroke.Color = SelectedTheme.ElementStroke
-
-        setTabButtons(false)
-        setElementsVisible(false)
-
-        tween(Topbar.UIStroke,          TWEEN_MED, { Transparency = 0 })
-        tween(Main.Shadow.Image,        TWEEN_MED, { ImageTransparency = 1 })
-        tween(Topbar.CornerRepair,      TWEEN_MED, { BackgroundTransparency = 1 })
-        tween(Topbar.Divider,           TWEEN_MED, { BackgroundTransparency = 1 })
-        tween(Main,   TWEEN_MED, { Size = UDim2.new(0, 495, 0, 45) })
-        tween(Topbar, TWEEN_MED, { Size = UDim2.new(0, 495, 0, 45) })
-        task.wait(0.3)
-        Elements.Visible = false
-        TabList.Visible = false
-        task.wait(0.2)
-        Debounce = false
-    end
-
-    local function maximize()
-        if Debounce then return end
-        Debounce = true
-        Minimized = false
-        Topbar.ChangeSize.Image = "rbxassetid://10137941941"
-
-        tween(Topbar.UIStroke,     TWEEN_MED, { Transparency = 1 })
-        tween(Main.Shadow.Image,   TWEEN_MED, { ImageTransparency = 0.6 })
-        tween(Topbar.CornerRepair, TWEEN_MED, { BackgroundTransparency = 0 })
-        tween(Topbar.Divider,      TWEEN_MED, { BackgroundTransparency = 0 })
-        tween(Main,   TWEEN_MED, { Size = UDim2.new(0, 500, 0, 475) })
-        tween(Topbar, TWEEN_MED, { Size = UDim2.new(0, 500, 0, 45) })
-        TabList.Visible = true
-        task.wait(0.2)
-        Elements.Visible = true
-        setElementsVisible(true)
-        task.wait(0.1)
-        setTabButtons(true)
-        task.wait(0.5)
-        Debounce = false
-    end
-
-    Topbar.ChangeSize.MouseButton1Click:Connect(function()
-        if Minimized then maximize() else minimize() end
-    end)
-    Topbar.Hide.MouseButton1Click:Connect(function()
-        if Hidden then unhide() else hide() end
-    end)
-    if MPrompt then
-        MPrompt.Interact.MouseButton1Click:Connect(function() if Hidden then unhide() end end)
-    end
-    for _, btn in ipairs(Topbar:GetChildren()) do
-        if btn:IsA("ImageButton") and btn.Name ~= "Icon" then
-            btn.MouseEnter:Connect(function() tween(btn, TWEEN_MED, { ImageTransparency = 0 }) end)
-            btn.MouseLeave:Connect(function() tween(btn, TWEEN_MED, { ImageTransparency = 0.8 }) end)
-        end
-    end
-
-    UserInputService.InputBegan:Connect(function(input, gp)
-        if gp then return end
-        if input.KeyCode == toggleKeyCode then
-            if Hidden then unhide() else hide() end
-        end
-    end)
-
-    -- Big loading animation finish → topbar in
-    task.spawn(function()
-        task.wait(1.6)
-        tween(Main, TWEEN_SLOW, { Size = UDim2.new(0, 390, 0, 90) })
-        task.wait(0.3)
-        tween(LoadingFrame.Title,    TWEEN_FAST, { TextTransparency = 1 })
-        tween(LoadingFrame.Subtitle, TWEEN_FAST, { TextTransparency = 1 })
-        tween(LoadingFrame.Version,  TWEEN_FAST, { TextTransparency = 1 })
-        task.wait(0.1)
-        tween(Main, TWEEN_SLOW, { Size = UDim2.new(0, 500, 0, 475) })
-        tween(Main.Shadow.Image, TWEEN_SLOW, { ImageTransparency = 0.6 })
-
-        Topbar.BackgroundTransparency = 1
-        Topbar.Divider.Size = UDim2.new(0, 0, 0, 1)
-        Topbar.Divider.BackgroundColor3 = SelectedTheme.ElementStroke
-        Topbar.CornerRepair.BackgroundTransparency = 1
-        Topbar.Title.TextTransparency = 1
-        if Topbar:FindFirstChild("Settings") then Topbar.Settings.ImageTransparency = 1 end
-        Topbar.ChangeSize.ImageTransparency = 1
-        Topbar.Hide.ImageTransparency = 1
-        if Topbar:FindFirstChild("Search") then Topbar.Search.ImageTransparency = 1 end
-
-        task.wait(0.5)
-        Topbar.Visible = true
-        tween(Topbar,                TWEEN_SLOW, { BackgroundTransparency = 0 })
-        tween(Topbar.CornerRepair,   TWEEN_SLOW, { BackgroundTransparency = 0 })
-        task.wait(0.1)
-        tween(Topbar.Divider, TweenInfo.new(1, Enum.EasingStyle.Exponential), { Size = UDim2.new(1, 0, 0, 1) })
-        tween(Topbar.Title,   TWEEN_MED, { TextTransparency = 0 })
-        task.wait(0.05)
-        tween(Topbar.ChangeSize, TWEEN_MED, { ImageTransparency = 0.8 })
-        task.wait(0.05)
-        tween(Topbar.Hide, TWEEN_MED, { ImageTransparency = 0.8 })
-    end)
-
-    --=====================================================
-    -- Tab creation
-    --=====================================================
-    local firstTab
-    function Window:CreateTab(name, icon)
-        local Tab = {}
-
-        local tabBtn = TabList.Template:Clone()
-        tabBtn.Name = name
-        tabBtn.Title.Text = name
-        tabBtn.Parent = TabList
-        tabBtn.Title.TextWrapped = false
-        tabBtn.Size = UDim2.new(0, tabBtn.Title.TextBounds.X + 30, 0, 30)
-
-        if icon and icon ~= 0 then
-            tabBtn.Image.Image = "rbxassetid://" .. tostring(icon)
-            tabBtn.Title.AnchorPoint = Vector2.new(0, 0.5)
-            tabBtn.Title.Position = UDim2.new(0, 37, 0.5, 0)
-            tabBtn.Image.Visible = true
-            tabBtn.Title.TextXAlignment = Enum.TextXAlignment.Left
-            tabBtn.Size = UDim2.new(0, tabBtn.Title.TextBounds.X + 52, 0, 30)
-        end
-
-        tabBtn.BackgroundTransparency = 1
-        tabBtn.Title.TextTransparency = 1
-        tabBtn.Image.ImageTransparency = 1
-        tabBtn.UIStroke.Transparency = 1
-
-        local page = Elements.Template:Clone()
-        page.Name = name
-        page.Visible = true
-        page.LayoutOrder = #Elements:GetChildren()
-        for _, t in ipairs(page:GetChildren()) do
-            if t:IsA("Frame") and t.Name ~= "Placeholder" then t:Destroy() end
-        end
-        page.Parent = Elements
-
-        if not firstTab then
-            firstTab = name
-            Elements.UIPageLayout.Animated = false
-            Elements.UIPageLayout:JumpTo(page)
-            Elements.UIPageLayout.Animated = true
-        end
-
-        tabBtn.UIStroke.Color = SelectedTheme.TabStroke
-        if Elements.UIPageLayout.CurrentPage == page then
-            tabBtn.BackgroundColor3 = SelectedTheme.TabBackgroundSelected
-            tabBtn.Image.ImageColor3 = SelectedTheme.SelectedTabTextColor
-            tabBtn.Title.TextColor3 = SelectedTheme.SelectedTabTextColor
-        else
-            tabBtn.BackgroundColor3 = SelectedTheme.TabBackground
-            tabBtn.Image.ImageColor3 = SelectedTheme.TabTextColor
-            tabBtn.Title.TextColor3 = SelectedTheme.TabTextColor
-        end
-
-        task.wait(0.1)
-        if firstTab == name then
-            tween(tabBtn,          TWEEN_SLOW, { BackgroundTransparency = 0 })
-            tween(tabBtn.Title,    TWEEN_SLOW, { TextTransparency = 0 })
-            tween(tabBtn.Image,    TWEEN_SLOW, { ImageTransparency = 0 })
-        else
-            tween(tabBtn,          TWEEN_SLOW, { BackgroundTransparency = 0.7 })
-            tween(tabBtn.Title,    TWEEN_SLOW, { TextTransparency = 0.2 })
-            tween(tabBtn.Image,    TWEEN_SLOW, { ImageTransparency = 0.2 })
-            tween(tabBtn.UIStroke, TWEEN_SLOW, { Transparency = 0.5 })
-        end
-
-        tabBtn.Interact.MouseButton1Click:Connect(function()
-            if Minimized then return end
-            tween(tabBtn,       TWEEN_SLOW, { BackgroundTransparency = 0, BackgroundColor3 = SelectedTheme.TabBackgroundSelected })
-            tween(tabBtn.Title, TWEEN_SLOW, { TextTransparency = 0, TextColor3 = SelectedTheme.SelectedTabTextColor })
-            tween(tabBtn.Image, TWEEN_SLOW, { ImageTransparency = 0, ImageColor3 = SelectedTheme.SelectedTabTextColor })
-            tween(tabBtn.UIStroke, TWEEN_SLOW, { Transparency = 1 })
-            for _, other in ipairs(TabList:GetChildren()) do
-                if other:IsA("Frame") and other ~= tabBtn and other.Name ~= "Template" and other.Name ~= "Placeholder" then
-                    tween(other,          TWEEN_SLOW, { BackgroundTransparency = 0.7, BackgroundColor3 = SelectedTheme.TabBackground })
-                    tween(other.Title,    TWEEN_SLOW, { TextTransparency = 0.2, TextColor3 = SelectedTheme.TabTextColor })
-                    tween(other.Image,    TWEEN_SLOW, { ImageTransparency = 0.2, ImageColor3 = SelectedTheme.TabTextColor })
-                    tween(other.UIStroke, TWEEN_SLOW, { Transparency = 0.5 })
-                end
-            end
-            if Elements.UIPageLayout.CurrentPage ~= page then
-                Elements.UIPageLayout:JumpTo(page)
-            end
-        end)
-
-        --=================================================
-        -- Helpers for elements
-        --=================================================
-
-        local sectionAdded = false
-
-        -- Button
-        function Tab:CreateButton(o)
-            local btn = Elements.Template.Button:Clone()
-            btn.Name = o.Name
-            btn.Title.Text = o.Name
-            btn.Visible = true
-            btn.Parent = page
-
-            btn.BackgroundTransparency = 1
-            btn.UIStroke.Transparency = 1
-            btn.Title.TextTransparency = 1
-            tween(btn,          TWEEN_SLOW, { BackgroundTransparency = 0 })
-            tween(btn.UIStroke, TWEEN_SLOW, { Transparency = 0 })
-            tween(btn.Title,    TWEEN_SLOW, { TextTransparency = 0 })
-
-            btn.MouseEnter:Connect(function()
-                tween(btn, TWEEN_MED, { BackgroundColor3 = SelectedTheme.ElementBackgroundHover })
-            end)
-            btn.MouseLeave:Connect(function()
-                tween(btn, TWEEN_MED, { BackgroundColor3 = SelectedTheme.ElementBackground })
-            end)
-            btn.Interact.MouseButton1Click:Connect(function()
-                tween(btn,          TWEEN_MED, { BackgroundColor3 = SelectedTheme.ElementBackgroundHover })
-                tween(btn.UIStroke, TWEEN_MED, { Transparency = 1 })
-                task.wait(0.2)
-                tween(btn,          TWEEN_MED, { BackgroundColor3 = SelectedTheme.ElementBackground })
-                tween(btn.UIStroke, TWEEN_MED, { Transparency = 0 })
-                if o.Callback then task.spawn(o.Callback) end
-            end)
-
-            local API = {}
-            function API:Set(t) btn.Title.Text = t; btn.Name = t end
-            return API
-        end
-
-        -- Section
-        function Tab:CreateSection(name)
-            if sectionAdded then
-                local sp = Elements.Template.SectionSpacing:Clone()
-                sp.Visible = true; sp.Parent = page
-            end
-            local sec = Elements.Template.SectionTitle:Clone()
-            sec.Title.Text = name; sec.Visible = true; sec.Parent = page
-            sec.Title.TextTransparency = 1
-            tween(sec.Title, TWEEN_SLOW, { TextTransparency = 0.4 })
-            sectionAdded = true
-            return { Set = function(_, t) sec.Title.Text = t end }
-        end
-
-        -- Divider
-        function Tab:CreateDivider()
-            local d = Elements.Template.Divider:Clone()
-            d.Visible = true; d.Parent = page
-            d.Divider.BackgroundTransparency = 1
-            tween(d.Divider, TWEEN_MED, { BackgroundTransparency = 0.85 })
-            return { Set = function(_, v) d.Visible = v end }
-        end
-
-        -- Label
-        function Tab:CreateLabel(text, icon, color, ignoreTheme)
-            local lbl = Elements.Template.Label:Clone()
-            lbl.Title.Text = text; lbl.Visible = true; lbl.Parent = page
-
-            lbl.BackgroundColor3 = color or SelectedTheme.SecondaryElementBackground
-            lbl.UIStroke.Color   = color or SelectedTheme.SecondaryElementStroke
-
-            if icon and icon ~= 0 then
-                lbl.Icon.Image = "rbxassetid://" .. tostring(icon)
-                lbl.Icon.Visible = true
-                lbl.Title.Position = UDim2.new(0, 45, 0.5, 0)
-                lbl.Title.Size = UDim2.new(1, -100, 0, 14)
-            else
-                lbl.Icon.Image = ""
-            end
-
-            lbl.Icon.ImageTransparency = 1
-            lbl.BackgroundTransparency = 1
-            lbl.UIStroke.Transparency = 1
-            lbl.Title.TextTransparency = 1
-            tween(lbl,           TWEEN_SLOW, { BackgroundTransparency = color and 0.8 or 0 })
-            tween(lbl.UIStroke,  TWEEN_SLOW, { Transparency = color and 0.7 or 0 })
-            tween(lbl.Icon,      TWEEN_SLOW, { ImageTransparency = 0.2 })
-            tween(lbl.Title,     TWEEN_SLOW, { TextTransparency = color and 0.2 or 0 })
-
-            local API = {}
-            function API:Set(t, ic, col)
-                lbl.Title.Text = t
-                if col then
-                    lbl.BackgroundColor3 = col
-                    lbl.UIStroke.Color = col
-                end
-                if ic then
-                    lbl.Icon.Image = "rbxassetid://" .. tostring(ic)
-                    lbl.Icon.Visible = true
-                    lbl.Title.Position = UDim2.new(0, 45, 0.5, 0)
-                    lbl.Title.Size = UDim2.new(1, -100, 0, 14)
-                end
-            end
-            return API
-        end
-
-        -- Paragraph
-        function Tab:CreateParagraph(o)
-            local p = Elements.Template.Paragraph:Clone()
-            p.Title.Text = o.Title; p.Content.Text = o.Content
-            p.Visible = true; p.Parent = page
-            p.BackgroundTransparency = 1
-            p.UIStroke.Transparency = 1
-            p.Title.TextTransparency = 1
-            p.Content.TextTransparency = 1
-            p.BackgroundColor3 = SelectedTheme.SecondaryElementBackground
-            p.UIStroke.Color = SelectedTheme.SecondaryElementStroke
-            tween(p, TWEEN_SLOW, { BackgroundTransparency = 0 })
-            tween(p.UIStroke, TWEEN_SLOW, { Transparency = 0 })
-            tween(p.Title, TWEEN_SLOW, { TextTransparency = 0 })
-            tween(p.Content, TWEEN_SLOW, { TextTransparency = 0 })
-
-            return {
-                Set = function(_, t)
-                    p.Title.Text = t.Title
-                    p.Content.Text = t.Content
-                end,
-            }
-        end
-
-        -- Toggle
-        function Tab:CreateToggle(o)
-            local Toggle = { CurrentValue = o.CurrentValue and true or false, Type = "Toggle" }
-            local tog = Elements.Template.Toggle:Clone()
-            tog.Name = o.Name; tog.Title.Text = o.Name
-            tog.Visible = true; tog.Parent = page
-            tog.BackgroundTransparency = 1
-            tog.UIStroke.Transparency = 1
-            tog.Title.TextTransparency = 1
-            tog.Switch.BackgroundColor3 = SelectedTheme.ToggleBackground
-
-            tween(tog,         TWEEN_SLOW, { BackgroundTransparency = 0 })
-            tween(tog.UIStroke,TWEEN_SLOW, { Transparency = 0 })
-            tween(tog.Title,   TWEEN_SLOW, { TextTransparency = 0 })
-
-            local function apply()
-                if Toggle.CurrentValue then
-                    tog.Switch.Indicator.Position = UDim2.new(1, -20, 0.5, 0)
-                    tog.Switch.Indicator.UIStroke.Color = SelectedTheme.ToggleEnabledStroke
-                    tog.Switch.Indicator.BackgroundColor3 = SelectedTheme.ToggleEnabled
-                    tog.Switch.UIStroke.Color = SelectedTheme.ToggleEnabledOuterStroke
-                else
-                    tog.Switch.Indicator.Position = UDim2.new(1, -40, 0.5, 0)
-                    tog.Switch.Indicator.UIStroke.Color = SelectedTheme.ToggleDisabledStroke
-                    tog.Switch.Indicator.BackgroundColor3 = SelectedTheme.ToggleDisabled
-                    tog.Switch.UIStroke.Color = SelectedTheme.ToggleDisabledOuterStroke
-                end
-            end
-            apply()
-
-            tog.MouseEnter:Connect(function() tween(tog, TWEEN_MED, { BackgroundColor3 = SelectedTheme.ElementBackgroundHover }) end)
-            tog.MouseLeave:Connect(function() tween(tog, TWEEN_MED, { BackgroundColor3 = SelectedTheme.ElementBackground }) end)
-
-            tog.Interact.MouseButton1Click:Connect(function()
-                Toggle.CurrentValue = not Toggle.CurrentValue
-                local pos = Toggle.CurrentValue and UDim2.new(1, -20, 0.5, 0) or UDim2.new(1, -40, 0.5, 0)
-                tween(tog.Switch.Indicator, TWEEN_MED, { Position = pos })
-                tween(tog.Switch.Indicator, TWEEN_MED, {
-                    BackgroundColor3 = Toggle.CurrentValue and SelectedTheme.ToggleEnabled or SelectedTheme.ToggleDisabled,
-                })
-                tween(tog.Switch.Indicator.UIStroke, TWEEN_MED, {
-                    Color = Toggle.CurrentValue and SelectedTheme.ToggleEnabledStroke or SelectedTheme.ToggleDisabledStroke,
-                })
-                tween(tog.Switch.UIStroke, TWEEN_MED, {
-                    Color = Toggle.CurrentValue and SelectedTheme.ToggleEnabledOuterStroke or SelectedTheme.ToggleDisabledOuterStroke,
-                })
-                if o.Callback then task.spawn(o.Callback, Toggle.CurrentValue) end
-            end)
-
-            function Toggle:Set(v)
-                self.CurrentValue = v and true or false
-                apply()
-                if o.Callback then task.spawn(o.Callback, self.CurrentValue) end
-            end
-
-            table.insert(themeListeners, function() apply() end)
-            if o.Flag then Phantom.Flags[o.Flag] = Toggle end
-            return Toggle
-        end
-
-        -- Slider
-        function Tab:CreateSlider(o)
-            local Slider = { Type = "Slider" }
-            local range = o.Range or {0, 100}
-            local inc   = o.Increment or 1
-            local suf   = o.Suffix or ""
-            Slider.CurrentValue = math.clamp(o.CurrentValue or range[1], range[1], range[2])
-
-            local sld = Elements.Template.Slider:Clone()
-            sld.Name = o.Name; sld.Title.Text = o.Name
-            sld.Visible = true; sld.Parent = page
-            sld.BackgroundTransparency = 1
-            sld.UIStroke.Transparency = 1
-            sld.Title.TextTransparency = 1
-
-            sld.Main.BackgroundColor3       = SelectedTheme.SliderBackground
-            sld.Main.UIStroke.Color         = SelectedTheme.SliderStroke
-            sld.Main.Progress.UIStroke.Color= SelectedTheme.SliderStroke
-            sld.Main.Progress.BackgroundColor3 = SelectedTheme.SliderProgress
-
-            tween(sld,          TWEEN_SLOW, { BackgroundTransparency = 0 })
-            tween(sld.UIStroke, TWEEN_SLOW, { Transparency = 0 })
-            tween(sld.Title,    TWEEN_SLOW, { TextTransparency = 0 })
-
-            local function applyVisual()
-                local pct = (Slider.CurrentValue - range[1]) / (range[2] - range[1])
-                local px  = sld.Main.AbsoluteSize.X * pct
-                if px < 5 then px = 5 end
-                sld.Main.Progress.Size = UDim2.new(0, px, 1, 0)
-                sld.Main.Information.Text = tostring(Slider.CurrentValue) .. (suf ~= "" and " " .. suf or "")
-            end
-            task.wait()
-            applyVisual()
-
-            sld.MouseEnter:Connect(function() tween(sld, TWEEN_MED, { BackgroundColor3 = SelectedTheme.ElementBackgroundHover }) end)
-            sld.MouseLeave:Connect(function() tween(sld, TWEEN_MED, { BackgroundColor3 = SelectedTheme.ElementBackground }) end)
-
-            local dragging = false
-            sld.Main.Interact.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1
-                or input.UserInputType == Enum.UserInputType.Touch then
-                    dragging = true
-                    tween(sld.Main.UIStroke,          TWEEN_MED, { Transparency = 1 })
-                    tween(sld.Main.Progress.UIStroke, TWEEN_MED, { Transparency = 1 })
-                end
-            end)
-            sld.Main.Interact.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1
-                or input.UserInputType == Enum.UserInputType.Touch then
-                    dragging = false
-                    tween(sld.Main.UIStroke,          TWEEN_MED, { Transparency = 0.4 })
-                    tween(sld.Main.Progress.UIStroke, TWEEN_MED, { Transparency = 0.3 })
-                end
-            end)
-            UserInputService.InputChanged:Connect(function(input)
-                if not dragging then return end
-                if input.UserInputType ~= Enum.UserInputType.MouseMovement
-                and input.UserInputType ~= Enum.UserInputType.Touch then return end
-                local x = input.Position.X
-                local rel = math.clamp((x - sld.Main.AbsolutePosition.X) / math.max(1, sld.Main.AbsoluteSize.X), 0, 1)
-                local val = range[1] + (range[2] - range[1]) * rel
-                val = math.floor(val / inc + 0.5) * inc
-                val = math.clamp(val, range[1], range[2])
-                if val ~= Slider.CurrentValue then
-                    Slider.CurrentValue = val
-                    applyVisual()
-                    if o.Callback then task.spawn(o.Callback, val) end
-                end
-            end)
-
-            function Slider:Set(v)
-                v = math.clamp(v, range[1], range[2])
-                self.CurrentValue = v
-                applyVisual()
-                if o.Callback then task.spawn(o.Callback, v) end
-            end
-
-            if o.Flag then Phantom.Flags[o.Flag] = Slider end
-            return Slider
-        end
-
-        -- Input
-        function Tab:CreateInput(o)
-            local Input = { CurrentValue = o.CurrentValue or "", Type = "Input" }
-            local inp = Elements.Template.Input:Clone()
-            inp.Name = o.Name; inp.Title.Text = o.Name
-            inp.Visible = true; inp.Parent = page
-            inp.BackgroundTransparency = 1
-            inp.UIStroke.Transparency = 1
-            inp.Title.TextTransparency = 1
-            inp.InputFrame.InputBox.Text = Input.CurrentValue
-            inp.InputFrame.BackgroundColor3 = SelectedTheme.InputBackground
-            inp.InputFrame.UIStroke.Color = SelectedTheme.InputStroke
-            inp.InputFrame.InputBox.PlaceholderText = o.PlaceholderText or ""
-            inp.InputFrame.Size = UDim2.new(0, math.max(140, inp.InputFrame.InputBox.TextBounds.X + 24), 0, 30)
-
-            tween(inp,          TWEEN_SLOW, { BackgroundTransparency = 0 })
-            tween(inp.UIStroke, TWEEN_SLOW, { Transparency = 0 })
-            tween(inp.Title,    TWEEN_SLOW, { TextTransparency = 0 })
-
-            inp.MouseEnter:Connect(function() tween(inp, TWEEN_MED, { BackgroundColor3 = SelectedTheme.ElementBackgroundHover }) end)
-            inp.MouseLeave:Connect(function() tween(inp, TWEEN_MED, { BackgroundColor3 = SelectedTheme.ElementBackground }) end)
-
-            inp.InputFrame.InputBox:GetPropertyChangedSignal("Text"):Connect(function()
-                tween(inp.InputFrame, TWEEN_MED, {
-                    Size = UDim2.new(0, math.max(140, inp.InputFrame.InputBox.TextBounds.X + 24), 0, 30),
-                })
-            end)
-
-            inp.InputFrame.InputBox.FocusLost:Connect(function()
-                Input.CurrentValue = inp.InputFrame.InputBox.Text
-                if o.Callback then task.spawn(o.Callback, Input.CurrentValue) end
-                if o.RemoveTextAfterFocusLost then inp.InputFrame.InputBox.Text = "" end
-            end)
-
-            function Input:Set(v)
-                inp.InputFrame.InputBox.Text = tostring(v)
-                self.CurrentValue = inp.InputFrame.InputBox.Text
-                if o.Callback then task.spawn(o.Callback, self.CurrentValue) end
-            end
-
-            if o.Flag then Phantom.Flags[o.Flag] = Input end
-            return Input
-        end
-
-        -- Keybind
-        function Tab:CreateKeybind(o)
-            local Keybind = { CurrentKeybind = o.CurrentKeybind or "None", Type = "Keybind" }
-            local kb = Elements.Template.Keybind:Clone()
-            kb.Name = o.Name; kb.Title.Text = o.Name
-            kb.Visible = true; kb.Parent = page
-            kb.BackgroundTransparency = 1
-            kb.UIStroke.Transparency = 1
-            kb.Title.TextTransparency = 1
-            kb.KeybindFrame.BackgroundColor3 = SelectedTheme.InputBackground
-            kb.KeybindFrame.UIStroke.Color = SelectedTheme.InputStroke
-            kb.KeybindFrame.KeybindBox.Text = Keybind.CurrentKeybind
-            kb.KeybindFrame.Size = UDim2.new(0, math.max(60, kb.KeybindFrame.KeybindBox.TextBounds.X + 24), 0, 30)
-
-            tween(kb,          TWEEN_SLOW, { BackgroundTransparency = 0 })
-            tween(kb.UIStroke, TWEEN_SLOW, { Transparency = 0 })
-            tween(kb.Title,    TWEEN_SLOW, { TextTransparency = 0 })
-
-            local checking = false
-            kb.KeybindFrame.KeybindBox.Focused:Connect(function() checking = true; kb.KeybindFrame.KeybindBox.Text = "" end)
-            kb.KeybindFrame.KeybindBox.FocusLost:Connect(function()
-                checking = false
-                if kb.KeybindFrame.KeybindBox.Text == "" then
-                    kb.KeybindFrame.KeybindBox.Text = Keybind.CurrentKeybind
-                end
-            end)
-            kb.MouseEnter:Connect(function() tween(kb, TWEEN_MED, { BackgroundColor3 = SelectedTheme.ElementBackgroundHover }) end)
-            kb.MouseLeave:Connect(function() tween(kb, TWEEN_MED, { BackgroundColor3 = SelectedTheme.ElementBackground }) end)
-            kb.KeybindFrame.KeybindBox:GetPropertyChangedSignal("Text"):Connect(function()
-                tween(kb.KeybindFrame, TWEEN_MED, {
-                    Size = UDim2.new(0, math.max(60, kb.KeybindFrame.KeybindBox.TextBounds.X + 24), 0, 30),
-                })
-            end)
-
-            UserInputService.InputBegan:Connect(function(input, gp)
-                if checking then
-                    if input.KeyCode ~= Enum.KeyCode.Unknown then
-                        local key = input.KeyCode.Name
-                        kb.KeybindFrame.KeybindBox.Text = key
-                        Keybind.CurrentKeybind = key
-                        kb.KeybindFrame.KeybindBox:ReleaseFocus()
-                        if o.CallOnChange and o.Callback then task.spawn(o.Callback, key) end
-                    end
-                elseif not gp and not o.CallOnChange
-                  and input.KeyCode.Name == Keybind.CurrentKeybind then
-                    if o.Callback then task.spawn(o.Callback) end
-                end
-            end)
-
-            function Keybind:Set(v)
-                self.CurrentKeybind = tostring(v)
-                kb.KeybindFrame.KeybindBox.Text = self.CurrentKeybind
-                if o.CallOnChange and o.Callback then task.spawn(o.Callback, self.CurrentKeybind) end
-            end
-
-            if o.Flag then Phantom.Flags[o.Flag] = Keybind end
-            return Keybind
-        end
-
-        -- Dropdown
-        function Tab:CreateDropdown(o)
-            local Dropdown = {
-                Type = "Dropdown",
-                Options = o.Options or {},
-                MultipleOptions = o.MultipleOptions == true,
-            }
-            -- Normalize CurrentOption to a table
-            if o.CurrentOption then
-                if type(o.CurrentOption) == "string" then
-                    Dropdown.CurrentOption = { o.CurrentOption }
-                else
-                    Dropdown.CurrentOption = {}
-                    for _, v in ipairs(o.CurrentOption) do table.insert(Dropdown.CurrentOption, v) end
-                end
-                if not Dropdown.MultipleOptions then
-                    Dropdown.CurrentOption = { Dropdown.CurrentOption[1] }
-                end
-            else
-                Dropdown.CurrentOption = {}
-            end
-
-            local dd = Elements.Template.Dropdown:Clone()
-            dd.Name = o.Name; dd.Title.Text = o.Name
-            dd.Visible = true; dd.Parent = page
-            dd.List.Visible = false
-
-            if Dropdown.MultipleOptions then
-                local n = #Dropdown.CurrentOption
-                if n == 0 then dd.Selected.Text = "None"
-                elseif n == 1 then dd.Selected.Text = Dropdown.CurrentOption[1]
-                else dd.Selected.Text = "Various" end
-            else
-                dd.Selected.Text = Dropdown.CurrentOption[1] or "None"
-            end
-
-            dd.Toggle.ImageColor3 = SelectedTheme.TextColor
-            dd.BackgroundColor3 = SelectedTheme.ElementBackground
-            dd.BackgroundTransparency = 1
-            dd.UIStroke.Transparency = 1
-            dd.Title.TextTransparency = 1
-            dd.Size = UDim2.new(1, -10, 0, 45)
-            tween(dd,          TWEEN_SLOW, { BackgroundTransparency = 0 })
-            tween(dd.UIStroke, TWEEN_SLOW, { Transparency = 0 })
-            tween(dd.Title,    TWEEN_SLOW, { TextTransparency = 0 })
-
-            for _, c in ipairs(dd.List:GetChildren()) do
-                if c:IsA("Frame") and c.Name ~= "Placeholder" then c:Destroy() end
-            end
-            dd.Toggle.Rotation = 180
-
-            local function isSelected(opt)
-                for _, v in ipairs(Dropdown.CurrentOption) do
-                    if v == opt then return true end
-                end
-                return false
-            end
-
-            local function buildOptions()
-                for _, opt in ipairs(Dropdown.Options) do
-                    local row = Elements.Template.Dropdown.List.Template:Clone()
-                    row.Name = opt; row.Title.Text = opt
-                    row.Parent = dd.List; row.Visible = true
-                    row.BackgroundTransparency = 1
-                    row.UIStroke.Transparency = 1
-                    row.Title.TextTransparency = 1
-                    row.BackgroundColor3 = isSelected(opt) and SelectedTheme.DropdownSelected or SelectedTheme.DropdownUnselected
-
-                    row.Interact.ZIndex = 50
-                    row.Interact.MouseButton1Click:Connect(function()
-                        if Dropdown.MultipleOptions then
-                            local idx
-                            for i, v in ipairs(Dropdown.CurrentOption) do
-                                if v == opt then idx = i; break end
-                            end
-                            if idx then
-                                table.remove(Dropdown.CurrentOption, idx)
-                            else
-                                table.insert(Dropdown.CurrentOption, opt)
-                            end
-                        else
-                            if isSelected(opt) then return end
-                            Dropdown.CurrentOption = { opt }
-                        end
-
-                        if Dropdown.MultipleOptions then
-                            local n = #Dropdown.CurrentOption
-                            if n == 0 then dd.Selected.Text = "None"
-                            elseif n == 1 then dd.Selected.Text = Dropdown.CurrentOption[1]
-                            else dd.Selected.Text = "Various" end
-                        else
-                            dd.Selected.Text = Dropdown.CurrentOption[1]
-                        end
-
-                        for _, ch in ipairs(dd.List:GetChildren()) do
-                            if ch:IsA("Frame") and ch.Name ~= "Placeholder" then
-                                ch.BackgroundColor3 = isSelected(ch.Name)
-                                    and SelectedTheme.DropdownSelected
-                                    or  SelectedTheme.DropdownUnselected
-                            end
-                        end
-
-                        if o.Callback then task.spawn(o.Callback, Dropdown.CurrentOption) end
-
-                        if not Dropdown.MultipleOptions then
-                            task.wait(0.1)
-                            tween(dd, TWEEN_MED, { Size = UDim2.new(1, -10, 0, 45) })
-                            for _, ch in ipairs(dd.List:GetChildren()) do
-                                if ch:IsA("Frame") and ch.Name ~= "Placeholder" then
-                                    tween(ch,          TWEEN_FAST, { BackgroundTransparency = 1 })
-                                    tween(ch.UIStroke, TWEEN_FAST, { Transparency = 1 })
-                                    tween(ch.Title,    TWEEN_FAST, { TextTransparency = 1 })
-                                end
-                            end
-                            tween(dd.List, TWEEN_FAST, { ScrollBarImageTransparency = 1 })
-                            tween(dd.Toggle, TWEEN_MED, { Rotation = 180 })
-                            task.wait(0.35)
-                            dd.List.Visible = false
-                        end
-                    end)
-                end
-            end
-            buildOptions()
-
-            local debounce = false
-            dd.Interact.MouseButton1Click:Connect(function()
-                if debounce then return end
-                debounce = true
-                if dd.List.Visible then
-                    tween(dd, TWEEN_MED, { Size = UDim2.new(1, -10, 0, 45) })
-                    for _, ch in ipairs(dd.List:GetChildren()) do
-                        if ch:IsA("Frame") and ch.Name ~= "Placeholder" then
-                            tween(ch,          TWEEN_FAST, { BackgroundTransparency = 1 })
-                            tween(ch.UIStroke, TWEEN_FAST, { Transparency = 1 })
-                            tween(ch.Title,    TWEEN_FAST, { TextTransparency = 1 })
-                        end
-                    end
-                    tween(dd.List,   TWEEN_FAST, { ScrollBarImageTransparency = 1 })
-                    tween(dd.Toggle, TWEEN_MED,  { Rotation = 180 })
-                    task.wait(0.35)
-                    dd.List.Visible = false
-                else
-                    tween(dd, TWEEN_MED, { Size = UDim2.new(1, -10, 0, 180) })
-                    dd.List.Visible = true
-                    tween(dd.List,   TWEEN_FAST, { ScrollBarImageTransparency = 0.7 })
-                    tween(dd.Toggle, TWEEN_MED,  { Rotation = 0 })
-                    for _, ch in ipairs(dd.List:GetChildren()) do
-                        if ch:IsA("Frame") and ch.Name ~= "Placeholder" then
-                            tween(ch, TWEEN_FAST, { BackgroundTransparency = 0 })
-                            if ch.Name ~= dd.Selected.Text then
-                                tween(ch.UIStroke, TWEEN_FAST, { Transparency = 0 })
-                            end
-                            tween(ch.Title, TWEEN_FAST, { TextTransparency = 0 })
-                        end
-                    end
-                end
-                debounce = false
-            end)
-
-            dd.MouseEnter:Connect(function() if not dd.List.Visible then tween(dd, TWEEN_MED, { BackgroundColor3 = SelectedTheme.ElementBackgroundHover }) end end)
-            dd.MouseLeave:Connect(function() tween(dd, TWEEN_MED, { BackgroundColor3 = SelectedTheme.ElementBackground }) end)
-
-            function Dropdown:Set(v)
-                if type(v) == "string" then v = { v } end
-                if not self.MultipleOptions then v = { v[1] } end
-                self.CurrentOption = v
-                if self.MultipleOptions then
-                    local n = #self.CurrentOption
-                    if n == 0 then dd.Selected.Text = "None"
-                    elseif n == 1 then dd.Selected.Text = self.CurrentOption[1]
-                    else dd.Selected.Text = "Various" end
-                else
-                    dd.Selected.Text = self.CurrentOption[1]
-                end
-                for _, ch in ipairs(dd.List:GetChildren()) do
-                    if ch:IsA("Frame") and ch.Name ~= "Placeholder" then
-                        ch.BackgroundColor3 = isSelected(ch.Name)
-                            and SelectedTheme.DropdownSelected
-                            or  SelectedTheme.DropdownUnselected
-                    end
-                end
-                if o.Callback then task.spawn(o.Callback, self.CurrentOption) end
-            end
-
-            function Dropdown:Refresh(newOpts)
-                self.Options = newOpts or {}
-                for _, ch in ipairs(dd.List:GetChildren()) do
-                    if ch:IsA("Frame") and ch.Name ~= "Placeholder" then ch:Destroy() end
-                end
-                buildOptions()
-            end
-
-            if o.Flag then Phantom.Flags[o.Flag] = Dropdown end
-            return Dropdown
-        end
-
-        -- ColorPicker
-        function Tab:CreateColorPicker(o)
-            local Picker = { Type = "ColorPicker", Color = o.Color or Color3.fromRGB(255,255,255) }
-            local cp = Elements.Template.ColorPicker:Clone()
-            local Background = cp.CPBackground
-            local Display = Background.Display
-            local MainCP  = Background.MainCP
-            local SliderCS = cp.ColorSlider
-
-            cp.ClipsDescendants = true
-            cp.Name = o.Name; cp.Title.Text = o.Name
-            cp.Visible = true; cp.Parent = page
-            cp.Size = UDim2.new(1, -10, 0, 45)
-            Background.Size = UDim2.new(0, 39, 0, 22)
-            Display.BackgroundTransparency = 0
-            MainCP.MainPoint.ImageTransparency = 1
-            cp.Interact.Size = UDim2.new(1, 0, 1, 0)
-            cp.Interact.Position = UDim2.new(0.5, 0, 0.5, 0)
-            cp.RGB.Position = UDim2.new(0, 17, 0, 70)
-            cp.HexInput.Position = UDim2.new(0, 17, 0, 90)
-            MainCP.ImageTransparency = 1
-            Background.BackgroundTransparency = 1
-
-            for _, ri in ipairs(cp.RGB:GetChildren()) do
-                if ri:IsA("Frame") then
-                    ri.BackgroundColor3 = SelectedTheme.InputBackground
-                    ri.UIStroke.Color = SelectedTheme.InputStroke
-                end
-            end
-            cp.HexInput.BackgroundColor3 = SelectedTheme.InputBackground
-            cp.HexInput.UIStroke.Color = SelectedTheme.InputStroke
-
-            local open = false
-            local h, s, v = Picker.Color:ToHSV()
-            local mouse = LocalPlayer:GetMouse()
-            local dragMain, dragSlider = false, false
-
-            local function setDisplay()
-                MainCP.MainPoint.Position = UDim2.new(s, -MainCP.MainPoint.AbsoluteSize.X/2, 1-v, -MainCP.MainPoint.AbsoluteSize.Y/2)
-                MainCP.MainPoint.ImageColor3 = Color3.fromHSV(h, s, v)
-                Background.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
-                Display.BackgroundColor3 = Color3.fromHSV(h, s, v)
-                local x = h * SliderCS.AbsoluteSize.X
-                SliderCS.SliderPoint.Position = UDim2.new(0, x - SliderCS.SliderPoint.AbsoluteSize.X/2, 0.5, 0)
-                SliderCS.SliderPoint.ImageColor3 = Color3.fromHSV(h, 1, 1)
-                local c = Color3.fromHSV(h, s, v)
-                local r,g,b = math.floor(c.R*255+0.5), math.floor(c.G*255+0.5), math.floor(c.B*255+0.5)
-                cp.RGB.RInput.InputBox.Text = tostring(r)
-                cp.RGB.GInput.InputBox.Text = tostring(g)
-                cp.RGB.BInput.InputBox.Text = tostring(b)
-                cp.HexInput.InputBox.Text = string.format("#%02X%02X%02X", r, g, b)
-                Picker.Color = c
-            end
-            setDisplay()
-
-            cp.Interact.MouseButton1Down:Connect(function()
-                tween(cp, TWEEN_MED, { BackgroundColor3 = SelectedTheme.ElementBackgroundHover })
-                task.wait(0.1)
-                tween(cp, TWEEN_MED, { BackgroundColor3 = SelectedTheme.ElementBackground })
-
-                if not open then
-                    open = true
-                    tween(Background, TWEEN_MED, { Size = UDim2.new(0, 173, 0, 86) })
-                    tween(cp,         TWEEN_MED, { Size = UDim2.new(1, -10, 0, 120) })
-                    tween(Display,    TWEEN_MED, { BackgroundTransparency = 1 })
-                    tween(cp.Interact,TWEEN_MED, { Position = UDim2.new(0.289, 0, 0.5, 0), Size = UDim2.new(0.574, 0, 1, 0) })
-                    tween(cp.RGB,     TWEEN_MED, { Position = UDim2.new(0, 17, 0, 40) })
-                    tween(cp.HexInput,TWEEN_MED, { Position = UDim2.new(0, 17, 0, 73) })
-                    tween(MainCP.MainPoint, TWEEN_FAST, { ImageTransparency = 0 })
-                    tween(MainCP,           TWEEN_FAST, { ImageTransparency = 0.1 })
-                    tween(Background,       TWEEN_MED,  { BackgroundTransparency = 0 })
-                else
-                    open = false
-                    tween(cp,         TWEEN_MED, { Size = UDim2.new(1, -10, 0, 45) })
-                    tween(Background, TWEEN_MED, { Size = UDim2.new(0, 39, 0, 22), BackgroundTransparency = 1 })
-                    tween(cp.Interact,TWEEN_MED, { Size = UDim2.new(1, 0, 1, 0), Position = UDim2.new(0.5, 0, 0.5, 0) })
-                    tween(cp.RGB,     TWEEN_MED, { Position = UDim2.new(0, 17, 0, 70) })
-                    tween(cp.HexInput,TWEEN_MED, { Position = UDim2.new(0, 17, 0, 90) })
-                    tween(Display,    TWEEN_MED, { BackgroundTransparency = 0 })
-                    tween(MainCP.MainPoint, TWEEN_FAST, { ImageTransparency = 1 })
-                    tween(MainCP,           TWEEN_FAST, { ImageTransparency = 1 })
-                end
-            end)
-
-            MainCP.MouseButton1Down:Connect(function() if open then dragMain = true end end)
-            MainCP.MainPoint.MouseButton1Down:Connect(function() if open then dragMain = true end end)
-            SliderCS.MouseButton1Down:Connect(function() dragSlider = true end)
-            SliderCS.SliderPoint.MouseButton1Down:Connect(function() dragSlider = true end)
-
-            UserInputService.InputEnded:Connect(function(i)
-                if i.UserInputType == Enum.UserInputType.MouseButton1
-                or i.UserInputType == Enum.UserInputType.Touch then
-                    dragMain, dragSlider = false, false
-                end
-            end)
-
-            RunService.RenderStepped:Connect(function()
-                if dragMain then
-                    local lx = math.clamp(mouse.X - MainCP.AbsolutePosition.X, 0, MainCP.AbsoluteSize.X)
-                    local ly = math.clamp(mouse.Y - MainCP.AbsolutePosition.Y, 0, MainCP.AbsoluteSize.Y)
-                    s = lx / math.max(1, MainCP.AbsoluteSize.X)
-                    v = 1 - (ly / math.max(1, MainCP.AbsoluteSize.Y))
-                    setDisplay()
-                    if o.Callback then task.spawn(o.Callback, Picker.Color) end
-                end
-                if dragSlider then
-                    local lx = math.clamp(mouse.X - SliderCS.AbsolutePosition.X, 0, SliderCS.AbsoluteSize.X)
-                    h = lx / math.max(1, SliderCS.AbsoluteSize.X)
-                    setDisplay()
-                    if o.Callback then task.spawn(o.Callback, Picker.Color) end
-                end
-            end)
-
-            cp.HexInput.InputBox.FocusLost:Connect(function()
-                local hex = cp.HexInput.InputBox.Text
-                local r, g, b = string.match(hex, "^#?(%w%w)(%w%w)(%w%w)$")
-                if r then
-                    local col = Color3.fromRGB(tonumber(r, 16), tonumber(g, 16), tonumber(b, 16))
-                    h, s, v = col:ToHSV()
-                    setDisplay()
-                    if o.Callback then task.spawn(o.Callback, Picker.Color) end
-                end
-            end)
-
-            function Picker:Set(c)
-                self.Color = c
-                h, s, v = c:ToHSV()
-                setDisplay()
-                if o.Callback then task.spawn(o.Callback, c) end
-            end
-
-            if o.Flag then Phantom.Flags[o.Flag] = Picker end
-            return Picker
-        end
-
-        return Tab
-    end
-
-    function Window:SetTheme(name) changeTheme(name) end
-
-    function Window:Destroy()
-        Rayfield.Enabled = false
-        Rayfield:Destroy()
-        if activeWindow == Window then activeWindow = nil end
-    end
-
-    return Window
+-- Saves the current config to a named profile.
+function Window:SaveConfig(profile)
+	VaenHub:_SaveConfig(self, profile or "default")
 end
 
-return Phantom
+-- Loads a named config profile.
+function Window:LoadConfig(profile)
+	VaenHub:_LoadConfig(self, profile or "default")
+end
+
+-- Lists all saved profiles for this window.
+function Window:ListProfiles()
+	return VaenHub:_ListProfiles(self)
+end
+
+-- Changes the theme at runtime. Accepts preset name or full theme table.
+function Window:SetTheme(theme)
+	self._theme = VaenHub:_ResolveTheme(theme)
+	VaenHub:_ApplyTheme(self)
+end
+
+-- Hides the window.
+function Window:Hide()
+	if self._hidden then return end
+	self._hidden = true
+	VaenHub:_AnimateHide(self)
+end
+
+-- Shows the window.
+function Window:Show()
+	if not self._hidden then return end
+	self._hidden = false
+	VaenHub:_AnimateShow(self)
+end
+
+-- Toggles min/max state.
+function Window:Minimise()
+	self._minimised = not self._minimised
+	VaenHub:_AnimateMinimise(self, self._minimised)
+end
+
+-- Destroys this window only.
+function Window:Destroy()
+	for _, hook in ipairs(self._unloadHooks) do
+		pcall(hook)
+	end
+	for _, conn in ipairs(self._connections) do
+		pcall(function() conn:Disconnect() end)
+	end
+	if self._gui then
+		pcall(function() self._gui:Destroy() end)
+	end
+	if self._blurEffect then
+		pcall(function() self._blurEffect:Destroy() end)
+	end
+end
+
+
+--==============================================================
+-- 3. TAB METHODS (returns chainable element builders)
+--==============================================================
+VaenHub._TabMeta = {}
+local Tab = VaenHub._TabMeta
+
+function Tab:Toggle(name)
+	return VaenHub:_NewElement(self, "Toggle", name)
+end
+
+function Tab:Slider(name)
+	return VaenHub:_NewElement(self, "Slider", name)
+end
+
+function Tab:Dropdown(name)
+	return VaenHub:_NewElement(self, "Dropdown", name)
+end
+
+function Tab:Button(name)
+	return VaenHub:_NewElement(self, "Button", name)
+end
+
+function Tab:Input(name)
+	return VaenHub:_NewElement(self, "Input", name)
+end
+
+function Tab:Keybind(name)
+	return VaenHub:_NewElement(self, "Keybind", name)
+end
+
+function Tab:ColorPicker(name)
+	return VaenHub:_NewElement(self, "ColorPicker", name)
+end
+
+function Tab:Label(text)
+	return VaenHub:_NewElement(self, "Label", text)
+end
+
+function Tab:Paragraph(title)
+	return VaenHub:_NewElement(self, "Paragraph", title)
+end
+
+function Tab:Section(name)
+	return VaenHub:_NewElement(self, "Section", name)
+end
+
+-- Master toggle section: enabling/disabling cascades to all elements after it
+function Tab:SectionToggle(name)
+	return VaenHub:_NewElement(self, "SectionToggle", name)
+end
+
+-- Live status display (read-only, update with :Set)
+function Tab:Status(name)
+	return VaenHub:_NewElement(self, "Status", name)
+end
+
+function Tab:Divider()
+	return VaenHub:_NewElement(self, "Divider", "")
+end
+
+
+--==============================================================
+-- 4. CHAINABLE ELEMENT BUILDERS
+--==============================================================
+-- All elements share these chainable methods. The actual builder pattern
+-- stores config on the element, then _MaterializeElement creates the UI
+-- when the chain ends (lazy build via __index/__newindex magic).
+
+VaenHub._ElementMeta = {}
+local Elem = VaenHub._ElementMeta
+
+function Elem:Default(value)
+	self._default = value
+	self._current = value
+	return self
+end
+
+function Elem:Range(min, max)
+	self._min = min
+	self._max = max
+	return self
+end
+
+function Elem:Increment(step)
+	self._step = step
+	return self
+end
+
+function Elem:Suffix(suffix)
+	self._suffix = suffix
+	return self
+end
+
+function Elem:Options(opts)
+	self._options = opts
+	return self
+end
+
+function Elem:Multi(enabled)
+	self._multi = enabled ~= false
+	return self
+end
+
+function Elem:Placeholder(text)
+	self._placeholder = text
+	return self
+end
+
+function Elem:Flag(flagName)
+	self._flag = flagName
+	VaenHub.Flags[flagName] = self
+	return self
+end
+
+function Elem:Icon(icon)
+	self._icon = icon
+	return self
+end
+
+function Elem:Hold(enabled)
+	self._hold = enabled ~= false
+	return self
+end
+
+function Elem:Content(text)
+	self._content = text
+	if self._frame and self._frame:FindFirstChild("Content") then
+		self._frame.Content.Text = text
+	end
+	return self
+end
+
+function Elem:OnChange(callback)
+	self._callback = callback
+	-- Materialize the element now that we have the callback
+	-- (or finalize if already built)
+	if not self._built then
+		VaenHub:_MaterializeElement(self)
+	end
+	return self
+end
+
+-- Buttons use OnClick instead of OnChange (semantic alias)
+function Elem.OnClick(self, callback)
+	return self:OnChange(callback)
+end
+
+-- Programmatically set the value
+function Elem:Set(value)
+	self._current = value
+	VaenHub:_UpdateElement(self, value)
+	if self._callback then
+		task.spawn(pcall, self._callback, value)
+	end
+	if self._flag and self._window and self._window._configSave.Enabled then
+		self._window:SaveConfig()
+	end
+	return self
+end
+
+function Elem:Get()
+	return self._current
+end
+
+-- Force build for elements with no callback (Labels, Status, Section, Divider)
+function Elem:Build()
+	if not self._built then
+		VaenHub:_MaterializeElement(self)
+	end
+	return self
+end
+
+-- Refreshes options (for dropdowns)
+function Elem:Refresh(newOptions)
+	self._options = newOptions
+	VaenHub:_RefreshDropdown(self)
+	return self
+end
+
+-- Disable/enable the element
+function Elem:Enabled(enabled)
+	self._enabled = enabled ~= false
+	VaenHub:_SetElementEnabled(self, self._enabled)
+	return self
+end
+
+-- Destroy a single element
+function Elem:Destroy()
+	if self._frame then
+		self._frame:Destroy()
+	end
+	if self._flag then
+		VaenHub.Flags[self._flag] = nil
+	end
+end
+
+
+--==============================================================
+-- 5. PROTECTION LAYER
+--==============================================================
+
+function VaenHub:_HideFromCoreGui(window)
+	if not window._gui then return end
+	local gui = window._gui
+
+	-- Randomize name to avoid pattern detection
+	gui.Name = HttpService:GenerateGUID(false):sub(1, 8)
+
+	-- Try every protection method available
+	local protected = false
+	if gethui then
+		pcall(function() gui.Parent = gethui() protected = true end)
+	end
+	if not protected and syn and syn.protect_gui then
+		pcall(function()
+			syn.protect_gui(gui)
+			gui.Parent = CoreGui
+			protected = true
+		end)
+	end
+	if not protected and protectgui then
+		pcall(function()
+			protectgui(gui)
+			gui.Parent = CoreGui
+			protected = true
+		end)
+	end
+	if not protected then
+		pcall(function() gui.Parent = CoreGui end)
+	end
+end
+
+function VaenHub:_EnableAntiAFK(window)
+	-- Disconnect the idle kick connection
+	local success = pcall(function()
+		local VirtualUser = getService("VirtualUser")
+		local conn = LocalPlayer.Idled:Connect(function()
+			VirtualUser:CaptureController()
+			VirtualUser:ClickButton2(Vector2.new())
+		end)
+		table.insert(window._connections, conn)
+	end)
+end
+
+function VaenHub:_EnableAntiKick(window)
+	-- Hook __namecall to block kicks
+	if not hookmetamethod then return end
+
+	local blockedMethods = {
+		Kick = true,
+		kick = true,
+	}
+
+	local old
+	old = hookmetamethod(game, "__namecall", function(self, ...)
+		local method = getnamecallmethod()
+		if blockedMethods[method] and self == LocalPlayer then
+			return nil
+		end
+		return old(self, ...)
+	end)
+
+	-- Store original for restoration
+	window._originalNamecall = old
+end
+
+function VaenHub:_EnableAntiLag(window)
+	pcall(function()
+		settings().Rendering.QualityLevel = 1
+		Lighting.GlobalShadows = false
+		Lighting.FogEnd = 1e10
+		for _, v in ipairs(workspace:GetDescendants()) do
+			if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Smoke") or v:IsA("Fire") then
+				v.Enabled = false
+			elseif v:IsA("Decal") or v:IsA("Texture") then
+				v.Transparency = 1
+			end
+		end
+	end)
+end
+
+function VaenHub:_EnableAutoRejoin(window)
+	local placeId = game.PlaceId
+	local jobId   = game.JobId
+
+	-- On game close, attempt rejoin
+	local conn = game:GetService("GuiService").ErrorMessageChanged:Connect(function(msg)
+		if msg and msg ~= "" then
+			task.wait(3)
+			pcall(function()
+				TeleportService:TeleportToPlaceInstance(placeId, jobId, LocalPlayer)
+			end)
+		end
+	end)
+	table.insert(window._connections, conn)
+end
+
+function VaenHub:_SetupServerHop(window, opts)
+	window._serverHop = function()
+		local servers = {}
+		local req = (syn and syn.request) or http_request or request
+		if not req then return false end
+
+		local success, response = pcall(function()
+			return req({
+				Url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100", game.PlaceId),
+				Method = "GET",
+			})
+		end)
+
+		if not success or not response then return false end
+
+		local data = HttpService:JSONDecode(response.Body)
+		if not data or not data.data then return false end
+
+		for _, server in ipairs(data.data) do
+			if server.id ~= game.JobId and server.playing < server.maxPlayers then
+				table.insert(servers, server)
+			end
+		end
+
+		if #servers == 0 then return false end
+
+		-- Sort by player count if preferLow
+		if opts.PreferLow then
+			table.sort(servers, function(a, b) return a.playing < b.playing end)
+		end
+
+		local chosen = servers[1]
+		TeleportService:TeleportToPlaceInstance(game.PlaceId, chosen.id, LocalPlayer)
+		return true
+	end
+end
+
+
+--==============================================================
+-- 6. KEY SYSTEM (full-screen blur + glass card)
+--==============================================================
+
+function VaenHub:_RunKeySystem(window)
+	local keySettings = window._keySystem
+	local theme = window._theme
+
+	-- Check for saved key first
+	if keySettings.SaveKey and writefile and isfile then
+		local savedKey = self:_LoadSavedKey(keySettings)
+		if savedKey then
+			for _, validKey in ipairs(keySettings.Keys or {}) do
+				if savedKey == validKey then
+					return true
+				end
+			end
+		end
+	end
+
+	-- Build the key UI
+	local keyGui = Instance.new("ScreenGui")
+	keyGui.Name = HttpService:GenerateGUID(false):sub(1, 8)
+	keyGui.IgnoreGuiInset = true
+	keyGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	keyGui.DisplayOrder = 999
+
+	-- Apply protection
+	if gethui then
+		keyGui.Parent = gethui()
+	elseif syn and syn.protect_gui then
+		syn.protect_gui(keyGui)
+		keyGui.Parent = CoreGui
+	else
+		keyGui.Parent = CoreGui
+	end
+
+	-- Full screen blur via Lighting
+	local blur = Instance.new("BlurEffect")
+	blur.Size = 0
+	blur.Parent = Lighting
+	TweenService:Create(blur, TweenInfo.new(0.6, Enum.EasingStyle.Quart), {Size = 24}):Play()
+
+	-- Dimming overlay
+	local overlay = Instance.new("Frame")
+	overlay.Size = UDim2.fromScale(1, 1)
+	overlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+	overlay.BackgroundTransparency = 1
+	overlay.BorderSizePixel = 0
+	overlay.Parent = keyGui
+	TweenService:Create(overlay, TweenInfo.new(0.6), {BackgroundTransparency = 0.5}):Play()
+
+	-- Glass card
+	local card = Instance.new("Frame")
+	card.AnchorPoint = Vector2.new(0.5, 0.5)
+	card.Position = UDim2.fromScale(0.5, 0.5)
+	card.Size = UDim2.new(0, 380, 0, 0)
+	card.BackgroundColor3 = theme.Background
+	card.BackgroundTransparency = 0.05
+	card.BorderSizePixel = 0
+	card.Parent = keyGui
+
+	local cardCorner = Instance.new("UICorner")
+	cardCorner.CornerRadius = UDim.new(0, 14)
+	cardCorner.Parent = card
+
+	local cardStroke = Instance.new("UIStroke")
+	cardStroke.Color = Color3.fromRGB(255, 255, 255)
+	cardStroke.Transparency = 0.9
+	cardStroke.Thickness = 1
+	cardStroke.Parent = card
+
+	-- Phantom logo background
+	local phantom = Instance.new("TextLabel")
+	phantom.Size = UDim2.new(0, 200, 0, 200)
+	phantom.AnchorPoint = Vector2.new(1, 1)
+	phantom.Position = UDim2.new(1, 20, 1, 20)
+	phantom.BackgroundTransparency = 1
+	phantom.Text = "V"
+	phantom.Font = Enum.Font.GothamBold
+	phantom.TextSize = 200
+	phantom.TextColor3 = Color3.fromRGB(255, 255, 255)
+	phantom.TextTransparency = 0.95
+	phantom.TextXAlignment = Enum.TextXAlignment.Right
+	phantom.TextYAlignment = Enum.TextYAlignment.Bottom
+	phantom.ZIndex = 0
+	phantom.Parent = card
+
+	-- Gradient accent on top edge
+	local accentBar = Instance.new("Frame")
+	accentBar.Size = UDim2.new(1, 0, 0, 2)
+	accentBar.Position = UDim2.fromOffset(0, 0)
+	accentBar.BackgroundColor3 = theme.Accent[1]
+	accentBar.BorderSizePixel = 0
+	accentBar.Parent = card
+
+	local accentGradient = Instance.new("UIGradient")
+	accentGradient.Color = ColorSequence.new{
+		ColorSequenceKeypoint.new(0, theme.Accent[1]),
+		ColorSequenceKeypoint.new(1, theme.Accent[2]),
+	}
+	accentGradient.Parent = accentBar
+
+	-- Title
+	local title = Instance.new("TextLabel")
+	title.Size = UDim2.new(1, -32, 0, 24)
+	title.Position = UDim2.fromOffset(20, 24)
+	title.BackgroundTransparency = 1
+	title.Text = keySettings.Title or window._name
+	title.Font = Enum.Font.GothamMedium
+	title.TextSize = 16
+	title.TextColor3 = Color3.fromRGB(240, 240, 245)
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.TextTransparency = 1
+	title.Parent = card
+
+	-- Subtitle
+	local subtitle = Instance.new("TextLabel")
+	subtitle.Size = UDim2.new(1, -32, 0, 16)
+	subtitle.Position = UDim2.fromOffset(20, 48)
+	subtitle.BackgroundTransparency = 1
+	subtitle.Text = keySettings.Subtitle or "Authentication required"
+	subtitle.Font = Enum.Font.Gotham
+	subtitle.TextSize = 12
+	subtitle.TextColor3 = Color3.fromRGB(160, 160, 170)
+	subtitle.TextXAlignment = Enum.TextXAlignment.Left
+	subtitle.TextTransparency = 1
+	subtitle.Parent = card
+
+	-- Note
+	local note = Instance.new("TextLabel")
+	note.Size = UDim2.new(1, -32, 0, 32)
+	note.Position = UDim2.fromOffset(20, 80)
+	note.BackgroundTransparency = 1
+	note.Text = keySettings.Note or "Enter your access key to continue."
+	note.Font = Enum.Font.Gotham
+	note.TextSize = 12
+	note.TextColor3 = Color3.fromRGB(180, 180, 190)
+	note.TextXAlignment = Enum.TextXAlignment.Left
+	note.TextWrapped = true
+	note.TextTransparency = 1
+	note.Parent = card
+
+	-- Input field
+	local inputFrame = Instance.new("Frame")
+	inputFrame.Size = UDim2.new(1, -32, 0, 40)
+	inputFrame.Position = UDim2.fromOffset(20, 124)
+	inputFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	inputFrame.BackgroundTransparency = 0.96
+	inputFrame.BorderSizePixel = 0
+	inputFrame.Parent = card
+
+	local inputCorner = Instance.new("UICorner")
+	inputCorner.CornerRadius = UDim.new(0, 8)
+	inputCorner.Parent = inputFrame
+
+	local inputStroke = Instance.new("UIStroke")
+	inputStroke.Color = Color3.fromRGB(255, 255, 255)
+	inputStroke.Transparency = 0.88
+	inputStroke.Thickness = 1
+	inputStroke.Parent = inputFrame
+
+	local inputBox = Instance.new("TextBox")
+	inputBox.Size = UDim2.new(1, -24, 1, 0)
+	inputBox.Position = UDim2.fromOffset(12, 0)
+	inputBox.BackgroundTransparency = 1
+	inputBox.Text = ""
+	inputBox.PlaceholderText = "Enter key..."
+	inputBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 130)
+	inputBox.Font = Enum.Font.Gotham
+	inputBox.TextSize = 13
+	inputBox.TextColor3 = Color3.fromRGB(240, 240, 245)
+	inputBox.TextXAlignment = Enum.TextXAlignment.Left
+	inputBox.ClearTextOnFocus = false
+	inputBox.Parent = inputFrame
+
+	-- Submit button
+	local submit = Instance.new("TextButton")
+	submit.Size = UDim2.new(1, -32, 0, 36)
+	submit.Position = UDim2.fromOffset(20, 176)
+	submit.BackgroundColor3 = theme.Accent[1]
+	submit.BorderSizePixel = 0
+	submit.Text = "Verify"
+	submit.Font = Enum.Font.GothamMedium
+	submit.TextSize = 13
+	submit.TextColor3 = Color3.fromRGB(255, 255, 255)
+	submit.AutoButtonColor = false
+	submit.Parent = card
+
+	local submitCorner = Instance.new("UICorner")
+	submitCorner.CornerRadius = UDim.new(0, 8)
+	submitCorner.Parent = submit
+
+	local submitGradient = Instance.new("UIGradient")
+	submitGradient.Color = ColorSequence.new{
+		ColorSequenceKeypoint.new(0, theme.Accent[1]),
+		ColorSequenceKeypoint.new(1, theme.Accent[2]),
+	}
+	submitGradient.Rotation = 135
+	submitGradient.Parent = submit
+
+	-- Cancel/close
+	local cancel = Instance.new("TextButton")
+	cancel.Size = UDim2.new(0, 28, 0, 28)
+	cancel.Position = UDim2.new(1, -36, 0, 8)
+	cancel.BackgroundTransparency = 1
+	cancel.Text = "×"
+	cancel.Font = Enum.Font.GothamBold
+	cancel.TextSize = 20
+	cancel.TextColor3 = Color3.fromRGB(180, 180, 190)
+	cancel.Parent = card
+
+	-- Animate card in
+	card:TweenSize(UDim2.new(0, 380, 0, 228), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.5, true)
+	task.wait(0.15)
+	for _, label in ipairs({title, subtitle, note}) do
+		TweenService:Create(label, TweenInfo.new(0.4), {TextTransparency = 0}):Play()
+		task.wait(0.05)
+	end
+
+	-- Verification
+	local result = nil
+	local attempts = keySettings.MaxAttempts or 5
+
+	local function verify()
+		local entered = inputBox.Text
+		for _, validKey in ipairs(keySettings.Keys or {}) do
+			if entered == validKey then
+				-- Save if requested
+				if keySettings.SaveKey then
+					self:_SaveKey(keySettings, entered)
+				end
+				result = true
+				return
+			end
+		end
+		attempts = attempts - 1
+
+		-- Shake animation
+		local origPos = card.Position
+		for i = 1, 3 do
+			card:TweenPosition(origPos + UDim2.fromOffset(8, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.05, true)
+			task.wait(0.05)
+			card:TweenPosition(origPos + UDim2.fromOffset(-8, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.05, true)
+			task.wait(0.05)
+		end
+		card:TweenPosition(origPos, Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.05, true)
+
+		inputBox.Text = ""
+
+		if attempts <= 0 then
+			result = false
+		end
+	end
+
+	submit.MouseButton1Click:Connect(verify)
+	inputBox.FocusLost:Connect(function(enter)
+		if enter then verify() end
+	end)
+	cancel.MouseButton1Click:Connect(function() result = false end)
+
+	-- Wait for result
+	while result == nil do task.wait() end
+
+	-- Fade out
+	TweenService:Create(blur, TweenInfo.new(0.4), {Size = 0}):Play()
+	TweenService:Create(overlay, TweenInfo.new(0.4), {BackgroundTransparency = 1}):Play()
+	card:TweenSize(UDim2.new(0, 380, 0, 0), Enum.EasingDirection.In, Enum.EasingStyle.Quart, 0.4, true)
+	task.wait(0.45)
+
+	blur:Destroy()
+	keyGui:Destroy()
+
+	return result
+end
+
+function VaenHub:_SaveKey(keySettings, key)
+	if not (writefile and makefolder) then return end
+	pcall(function()
+		if not isfolder("VaenHub") then makefolder("VaenHub") end
+		if not isfolder("VaenHub/Keys") then makefolder("VaenHub/Keys") end
+		writefile("VaenHub/Keys/" .. (keySettings.FileName or "key") .. ".key", key)
+	end)
+end
+
+function VaenHub:_LoadSavedKey(keySettings)
+	if not (readfile and isfile) then return nil end
+	local path = "VaenHub/Keys/" .. (keySettings.FileName or "key") .. ".key"
+	if isfile(path) then
+		local ok, data = pcall(readfile, path)
+		if ok then return data end
+	end
+	return nil
+end
+
+
+--==============================================================
+-- 7. THEME ENGINE
+--==============================================================
+
+VaenHub.Presets = {
+	Phantom = { -- The default purple/indigo
+		Background     = Color3.fromRGB(10, 10, 15),
+		Topbar         = Color3.fromRGB(15, 15, 22),
+		ElementBg      = Color3.fromRGB(20, 20, 28),
+		ElementHover   = Color3.fromRGB(28, 28, 38),
+		Border         = Color3.fromRGB(40, 40, 55),
+		Text           = Color3.fromRGB(240, 240, 245),
+		TextDim        = Color3.fromRGB(160, 160, 170),
+		Accent         = {Color3.fromRGB(99, 102, 241), Color3.fromRGB(168, 85, 247)},
+		AccentGlow     = Color3.fromRGB(168, 85, 247),
+		Success        = Color3.fromRGB(34, 197, 94),
+		Warning        = Color3.fromRGB(250, 204, 21),
+		Danger         = Color3.fromRGB(239, 68, 68),
+	},
+	Ocean = {
+		Background     = Color3.fromRGB(8, 15, 22),
+		Topbar         = Color3.fromRGB(12, 22, 32),
+		ElementBg      = Color3.fromRGB(15, 25, 38),
+		ElementHover   = Color3.fromRGB(22, 35, 50),
+		Border         = Color3.fromRGB(30, 50, 70),
+		Text           = Color3.fromRGB(230, 240, 250),
+		TextDim        = Color3.fromRGB(140, 160, 180),
+		Accent         = {Color3.fromRGB(56, 189, 248), Color3.fromRGB(14, 165, 233)},
+		AccentGlow     = Color3.fromRGB(56, 189, 248),
+		Success        = Color3.fromRGB(34, 197, 94),
+		Warning        = Color3.fromRGB(250, 204, 21),
+		Danger         = Color3.fromRGB(239, 68, 68),
+	},
+	Sunset = {
+		Background     = Color3.fromRGB(18, 10, 15),
+		Topbar         = Color3.fromRGB(25, 15, 22),
+		ElementBg      = Color3.fromRGB(32, 20, 28),
+		ElementHover   = Color3.fromRGB(42, 28, 38),
+		Border         = Color3.fromRGB(60, 40, 55),
+		Text           = Color3.fromRGB(250, 240, 245),
+		TextDim        = Color3.fromRGB(180, 160, 170),
+		Accent         = {Color3.fromRGB(244, 114, 182), Color3.fromRGB(251, 146, 60)},
+		AccentGlow     = Color3.fromRGB(244, 114, 182),
+		Success        = Color3.fromRGB(34, 197, 94),
+		Warning        = Color3.fromRGB(250, 204, 21),
+		Danger         = Color3.fromRGB(239, 68, 68),
+	},
+	Mono = {
+		Background     = Color3.fromRGB(12, 12, 12),
+		Topbar         = Color3.fromRGB(18, 18, 18),
+		ElementBg      = Color3.fromRGB(22, 22, 22),
+		ElementHover   = Color3.fromRGB(30, 30, 30),
+		Border         = Color3.fromRGB(45, 45, 45),
+		Text           = Color3.fromRGB(245, 245, 245),
+		TextDim        = Color3.fromRGB(160, 160, 160),
+		Accent         = {Color3.fromRGB(220, 220, 220), Color3.fromRGB(255, 255, 255)},
+		AccentGlow     = Color3.fromRGB(255, 255, 255),
+		Success        = Color3.fromRGB(34, 197, 94),
+		Warning        = Color3.fromRGB(250, 204, 21),
+		Danger         = Color3.fromRGB(239, 68, 68),
+	},
+}
+
+function VaenHub:_ResolveTheme(input)
+	-- String preset
+	if type(input) == "string" then
+		return self.Presets[input] or self.Presets.Phantom
+	end
+	-- Custom table (merge with Phantom defaults)
+	if type(input) == "table" then
+		local merged = {}
+		for k, v in pairs(self.Presets.Phantom) do merged[k] = v end
+		for k, v in pairs(input) do merged[k] = v end
+		return merged
+	end
+	return self.Presets.Phantom
+end
+
+function VaenHub:_ResolveKeybinds(input)
+	local defaults = {
+		Toggle = "K",
+		Panic  = "P",
+	}
+	if type(input) == "table" then
+		for k, v in pairs(input) do defaults[k] = v end
+	end
+	return defaults
+end
+
+function VaenHub:_ApplyTheme(window)
+	if not window._gui then return end
+	local theme = window._theme
+
+	-- Walk all themed elements and update
+	for _, descendant in ipairs(window._gui:GetDescendants()) do
+		local role = descendant:GetAttribute("ThemeRole")
+		if role and theme[role] then
+			if descendant:IsA("Frame") or descendant:IsA("TextButton") then
+				if typeof(theme[role]) == "Color3" then
+					descendant.BackgroundColor3 = theme[role]
+				end
+			elseif descendant:IsA("TextLabel") or descendant:IsA("TextBox") then
+				descendant.TextColor3 = theme[role]
+			elseif descendant:IsA("UIStroke") then
+				descendant.Color = theme[role]
+			elseif descendant:IsA("UIGradient") and role == "Accent" then
+				descendant.Color = ColorSequence.new{
+					ColorSequenceKeypoint.new(0, theme.Accent[1]),
+					ColorSequenceKeypoint.new(1, theme.Accent[2]),
+				}
+			end
+		end
+	end
+end
+
+
+--==============================================================
+-- 8. CONFIG SAVE / LOAD
+--==============================================================
+
+function VaenHub:_SaveConfig(window, profile)
+	if not (writefile and makefolder) then return end
+	local data = {}
+	for _, elem in ipairs(window._elements) do
+		if elem._flag then
+			if elem._type == "ColorPicker" then
+				local c = elem._current or Color3.new(1,1,1)
+				data[elem._flag] = {c.R*255, c.G*255, c.B*255}
+			else
+				data[elem._flag] = elem._current
+			end
+		end
+	end
+
+	pcall(function()
+		if not isfolder("VaenHub") then makefolder("VaenHub") end
+		if not isfolder("VaenHub/Configs") then makefolder("VaenHub/Configs") end
+		local folder = "VaenHub/Configs/" .. (window._configSave.FolderName or window._name)
+		if not isfolder(folder) then makefolder(folder) end
+		writefile(folder .. "/" .. profile .. ".vhc", HttpService:JSONEncode(data))
+	end)
+end
+
+function VaenHub:_LoadConfig(window, profile)
+	if not (readfile and isfile) then return end
+	local folder = "VaenHub/Configs/" .. (window._configSave.FolderName or window._name)
+	local path = folder .. "/" .. profile .. ".vhc"
+
+	if not isfile(path) then return end
+
+	local ok, data = pcall(function()
+		return HttpService:JSONDecode(readfile(path))
+	end)
+	if not ok or not data then return end
+
+	for _, elem in ipairs(window._elements) do
+		if elem._flag and data[elem._flag] ~= nil then
+			local value = data[elem._flag]
+			if elem._type == "ColorPicker" and type(value) == "table" then
+				value = Color3.fromRGB(value[1], value[2], value[3])
+			end
+			pcall(function() elem:Set(value) end)
+		end
+	end
+end
+
+function VaenHub:_ListProfiles(window)
+	if not (listfiles and isfolder) then return {} end
+	local folder = "VaenHub/Configs/" .. (window._configSave.FolderName or window._name)
+	if not isfolder(folder) then return {} end
+
+	local profiles = {}
+	for _, file in ipairs(listfiles(folder)) do
+		local name = file:match("([^/\\]+)%.vhc$")
+		if name then table.insert(profiles, name) end
+	end
+	return profiles
+end
+
+
+--==============================================================
+-- 9. ANIMATIONS
+--==============================================================
+
+local function tween(obj, time, props, style, dir)
+	style = style or Enum.EasingStyle.Quart
+	dir   = dir or Enum.EasingDirection.Out
+	local t = TweenService:Create(obj, TweenInfo.new(time, style, dir), props)
+	t:Play()
+	return t
+end
+
+local function tweenAsync(obj, time, props, style, dir)
+	local t = tween(obj, time, props, style, dir)
+	t.Completed:Wait()
+end
+
+VaenHub._tween = tween
+VaenHub._tweenAsync = tweenAsync
+
+
+--==============================================================
+-- 10. UI BUILDERS
+--==============================================================
+
+-- Used by many element types: gradient stroke
+local function makeGradientStroke(parent, accent, transparency)
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 1
+	stroke.Color = Color3.fromRGB(255, 255, 255)
+	stroke.Transparency = transparency or 0.9
+	stroke.Parent = parent
+	return stroke
+end
+
+local function makeCorner(parent, radius)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, radius or 8)
+	c.Parent = parent
+	return c
+end
+
+function VaenHub:_BuildWindow(window)
+	local theme = window._theme
+
+	-- ScreenGui
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "VaenHub_" .. HttpService:GenerateGUID(false):sub(1, 6)
+	gui.IgnoreGuiInset = true
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	gui.ResetOnSpawn = false
+	gui.DisplayOrder = 100
+
+	window._gui = gui
+	-- Parent gets set by HideFromCoreGui or falls back to PlayerGui
+	if not window._protect or not window._protect.HideUI then
+		gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+	end
+
+	-- Main container
+	local main = Instance.new("Frame")
+	main.Name = "Main"
+	main.AnchorPoint = Vector2.new(0.5, 0.5)
+	main.Position = UDim2.fromScale(0.5, 0.5)
+	main.Size = UDim2.fromOffset(620, 400)
+	main.BackgroundColor3 = theme.Background
+	main.BorderSizePixel = 0
+	main:SetAttribute("ThemeRole", "Background")
+	main.Parent = gui
+	window._main = main
+
+	makeCorner(main, 14)
+	makeGradientStroke(main, theme, 0.92)
+
+	-- Phantom watermark
+	local phantom = Instance.new("TextLabel")
+	phantom.Name = "Phantom"
+	phantom.Size = UDim2.fromOffset(280, 280)
+	phantom.AnchorPoint = Vector2.new(1, 1)
+	phantom.Position = UDim2.new(1, 30, 1, 30)
+	phantom.BackgroundTransparency = 1
+	phantom.Text = window._config.Theme and window._config.Theme.PhantomLogo or "V"
+	phantom.Font = Enum.Font.GothamBold
+	phantom.TextSize = 260
+	phantom.TextColor3 = Color3.fromRGB(255, 255, 255)
+	phantom.TextTransparency = 0.97
+	phantom.TextXAlignment = Enum.TextXAlignment.Right
+	phantom.TextYAlignment = Enum.TextYAlignment.Bottom
+	phantom.ZIndex = 0
+	phantom.Parent = main
+
+	-- Topbar
+	local topbar = Instance.new("Frame")
+	topbar.Name = "Topbar"
+	topbar.Size = UDim2.new(1, 0, 0, 44)
+	topbar.BackgroundColor3 = theme.Topbar
+	topbar.BorderSizePixel = 0
+	topbar:SetAttribute("ThemeRole", "Topbar")
+	topbar.Parent = main
+
+	makeCorner(topbar, 14)
+
+	-- Corner repair (hides bottom rounded corners on topbar)
+	local cornerRepair = Instance.new("Frame")
+	cornerRepair.Size = UDim2.new(1, 0, 0, 14)
+	cornerRepair.Position = UDim2.new(0, 0, 1, -14)
+	cornerRepair.BackgroundColor3 = theme.Topbar
+	cornerRepair.BorderSizePixel = 0
+	cornerRepair:SetAttribute("ThemeRole", "Topbar")
+	cornerRepair.Parent = topbar
+
+	-- Logo box
+	local logoBox = Instance.new("Frame")
+	logoBox.Size = UDim2.fromOffset(22, 22)
+	logoBox.Position = UDim2.fromOffset(14, 11)
+	logoBox.BackgroundColor3 = theme.Accent[1]
+	logoBox.BorderSizePixel = 0
+	logoBox.Parent = topbar
+
+	makeCorner(logoBox, 6)
+
+	local logoGradient = Instance.new("UIGradient")
+	logoGradient.Color = ColorSequence.new{
+		ColorSequenceKeypoint.new(0, theme.Accent[1]),
+		ColorSequenceKeypoint.new(1, theme.Accent[2]),
+	}
+	logoGradient.Rotation = 135
+	logoGradient:SetAttribute("ThemeRole", "Accent")
+	logoGradient.Parent = logoBox
+
+	local logoText = Instance.new("TextLabel")
+	logoText.Size = UDim2.fromScale(1, 1)
+	logoText.BackgroundTransparency = 1
+	logoText.Text = (window._name):sub(1, 1)
+	logoText.Font = Enum.Font.GothamBold
+	logoText.TextSize = 12
+	logoText.TextColor3 = Color3.fromRGB(255, 255, 255)
+	logoText.Parent = logoBox
+
+	-- Title
+	local title = Instance.new("TextLabel")
+	title.Size = UDim2.new(1, -100, 0, 22)
+	title.Position = UDim2.fromOffset(44, 11)
+	title.BackgroundTransparency = 1
+	title.Text = window._name
+	title.Font = Enum.Font.GothamMedium
+	title.TextSize = 13
+	title.TextColor3 = theme.Text
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title:SetAttribute("ThemeRole", "Text")
+	title.Parent = topbar
+
+	-- Topbar buttons (search, settings, minimize, close)
+	local function makeIconButton(name, iconText, xOffset)
+		local btn = Instance.new("TextButton")
+		btn.Name = name
+		btn.Size = UDim2.fromOffset(24, 24)
+		btn.Position = UDim2.new(1, xOffset, 0, 10)
+		btn.BackgroundTransparency = 1
+		btn.Text = iconText
+		btn.Font = Enum.Font.GothamBold
+		btn.TextSize = 14
+		btn.TextColor3 = theme.TextDim
+		btn.AutoButtonColor = false
+		btn:SetAttribute("ThemeRole", "TextDim")
+		btn.Parent = topbar
+
+		btn.MouseEnter:Connect(function()
+			tween(btn, 0.2, {TextColor3 = theme.Text})
+		end)
+		btn.MouseLeave:Connect(function()
+			tween(btn, 0.2, {TextColor3 = theme.TextDim})
+		end)
+		return btn
+	end
+
+	local closeBtn    = makeIconButton("Close",    "×",  -32)
+	local minBtn      = makeIconButton("Minimise", "−",  -60)
+	local settingsBtn = makeIconButton("Settings", "⚙",  -88)
+	local searchBtn   = makeIconButton("Search",   "⌕",  -116)
+
+	closeBtn.MouseButton1Click:Connect(function() window:Destroy() end)
+	minBtn.MouseButton1Click:Connect(function() window:Minimise() end)
+
+	-- Tab bar
+	local tabBar = Instance.new("Frame")
+	tabBar.Name = "TabBar"
+	tabBar.Size = UDim2.new(1, 0, 0, 36)
+	tabBar.Position = UDim2.fromOffset(0, 44)
+	tabBar.BackgroundTransparency = 1
+	tabBar.Parent = main
+	window._tabBar = tabBar
+
+	local tabBarLine = Instance.new("Frame")
+	tabBarLine.Size = UDim2.new(1, 0, 0, 1)
+	tabBarLine.Position = UDim2.new(0, 0, 1, -1)
+	tabBarLine.BackgroundColor3 = theme.Border
+	tabBarLine.BackgroundTransparency = 0.7
+	tabBarLine.BorderSizePixel = 0
+	tabBarLine.Parent = tabBar
+
+	local tabLayout = Instance.new("UIListLayout")
+	tabLayout.FillDirection = Enum.FillDirection.Horizontal
+	tabLayout.Padding = UDim.new(0, 4)
+	tabLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	tabLayout.Parent = tabBar
+
+	local tabPad = Instance.new("UIPadding")
+	tabPad.PaddingLeft = UDim.new(0, 14)
+	tabPad.PaddingRight = UDim.new(0, 14)
+	tabPad.Parent = tabBar
+
+	-- Content area (pages)
+	local content = Instance.new("Frame")
+	content.Name = "Content"
+	content.Size = UDim2.new(1, 0, 1, -80)
+	content.Position = UDim2.fromOffset(0, 80)
+	content.BackgroundTransparency = 1
+	content.Parent = main
+	window._content = content
+
+	-- Make draggable
+	self:_MakeDraggable(main, topbar)
+
+	-- Toggle keybind
+	local toggleKey = Enum.KeyCode[window._keybinds.Toggle] or Enum.KeyCode.K
+	local conn = UserInputService.InputBegan:Connect(function(input, processed)
+		if processed then return end
+		if input.KeyCode == toggleKey then
+			if window._hidden then window:Show() else window:Hide() end
+		end
+	end)
+	table.insert(window._connections, conn)
+end
+
+function VaenHub:_BuildTab(window, tab)
+	local theme = window._theme
+
+	-- Tab button
+	local btn = Instance.new("TextButton")
+	btn.Name = tab._name
+	btn.Size = UDim2.fromOffset(0, 26)
+	btn.AutomaticSize = Enum.AutomaticSize.X
+	btn.BackgroundTransparency = 1
+	btn.Text = ""
+	btn.AutoButtonColor = false
+	btn.Parent = window._tabBar
+
+	local btnPad = Instance.new("UIPadding")
+	btnPad.PaddingLeft = UDim.new(0, 11)
+	btnPad.PaddingRight = UDim.new(0, 11)
+	btnPad.Parent = btn
+
+	makeCorner(btn, 6)
+
+	-- Label inside button
+	local btnLabel = Instance.new("TextLabel")
+	btnLabel.AutomaticSize = Enum.AutomaticSize.X
+	btnLabel.Size = UDim2.new(0, 0, 1, 0)
+	btnLabel.BackgroundTransparency = 1
+	btnLabel.Text = tab._name
+	btnLabel.Font = Enum.Font.GothamMedium
+	btnLabel.TextSize = 12
+	btnLabel.TextColor3 = theme.TextDim
+	btnLabel.Parent = btn
+
+	-- Gradient (visible when selected)
+	local btnGradient = Instance.new("UIGradient")
+	btnGradient.Color = ColorSequence.new{
+		ColorSequenceKeypoint.new(0, theme.Accent[1]),
+		ColorSequenceKeypoint.new(1, theme.Accent[2]),
+	}
+	btnGradient.Transparency = NumberSequence.new(1) -- hidden initially
+	btnGradient.Rotation = 135
+	btnGradient.Parent = btn
+
+	tab._button = btn
+	tab._buttonLabel = btnLabel
+	tab._buttonGradient = btnGradient
+
+	-- Page (scrolling frame for elements)
+	local page = Instance.new("ScrollingFrame")
+	page.Name = tab._name
+	page.Size = UDim2.fromScale(1, 1)
+	page.BackgroundTransparency = 1
+	page.BorderSizePixel = 0
+	page.ScrollBarThickness = 2
+	page.ScrollBarImageColor3 = theme.TextDim
+	page.ScrollBarImageTransparency = 0.7
+	page.CanvasSize = UDim2.new()
+	page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	page.Visible = false
+	page.Parent = window._content
+
+	local pageLayout = Instance.new("UIListLayout")
+	pageLayout.Padding = UDim.new(0, 6)
+	pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	pageLayout.Parent = page
+
+	local pagePad = Instance.new("UIPadding")
+	pagePad.PaddingTop = UDim.new(0, 10)
+	pagePad.PaddingBottom = UDim.new(0, 10)
+	pagePad.PaddingLeft = UDim.new(0, 14)
+	pagePad.PaddingRight = UDim.new(0, 14)
+	pagePad.Parent = page
+
+	tab._page = page
+
+	-- Click handler
+	btn.MouseButton1Click:Connect(function()
+		window:_SelectTab(tab)
+	end)
+end
+
+function Window:_SelectTab(tab)
+	local theme = self._theme
+	for _, t in ipairs(self._tabs) do
+		if t == tab then
+			t._page.Visible = true
+			VaenHub._tween(t._buttonLabel, 0.3, {TextColor3 = Color3.fromRGB(255,255,255)})
+			t._buttonGradient.Transparency = NumberSequence.new(0.75)
+		else
+			t._page.Visible = false
+			VaenHub._tween(t._buttonLabel, 0.3, {TextColor3 = theme.TextDim})
+			t._buttonGradient.Transparency = NumberSequence.new(1)
+		end
+	end
+	self._currentTab = tab
+end
+
+function VaenHub:_NewElement(tab, elemType, name)
+	local elem = setmetatable({
+		_type        = elemType,
+		_name        = name,
+		_tab         = tab,
+		_window      = tab._window,
+		_built       = false,
+		_enabled     = true,
+		_options     = {},
+		_current     = nil,
+		_default     = nil,
+	}, { __index = self._ElementMeta })
+
+	-- For elements that don't need a callback (Label, Status, Section, Divider, Paragraph)
+	-- auto-build them at the next tick
+	if elemType == "Label" or elemType == "Status" or elemType == "Section"
+		or elemType == "SectionToggle" or elemType == "Divider" or elemType == "Paragraph" then
+		task.defer(function()
+			if not elem._built then
+				self:_MaterializeElement(elem)
+			end
+		end)
+	end
+
+	return elem
+end
+
+function VaenHub:_MaterializeElement(elem)
+	if elem._built then return end
+	elem._built = true
+
+	local builder = self._ElementBuilders[elem._type]
+	if builder then
+		builder(self, elem)
+		table.insert(elem._window._elements, elem)
+	end
+end
+
+-- The element-specific builders
+VaenHub._ElementBuilders = {}
+
+VaenHub._ElementBuilders.Toggle = function(self, elem)
+	local window = elem._window
+	local theme  = window._theme
+
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.new(1, 0, 0, 36)
+	frame.BackgroundColor3 = theme.ElementBg
+	frame.BorderSizePixel = 0
+	frame:SetAttribute("ThemeRole", "ElementBg")
+	frame.Parent = elem._tab._page
+
+	makeCorner(frame, 8)
+	makeGradientStroke(frame, theme, 0.94)
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, -64, 1, 0)
+	label.Position = UDim2.fromOffset(12, 0)
+	label.BackgroundTransparency = 1
+	label.Text = elem._name
+	label.Font = Enum.Font.Gotham
+	label.TextSize = 12
+	label.TextColor3 = theme.Text
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label:SetAttribute("ThemeRole", "Text")
+	label.Parent = frame
+
+	-- Switch
+	local switch = Instance.new("Frame")
+	switch.Size = UDim2.fromOffset(32, 16)
+	switch.Position = UDim2.new(1, -44, 0.5, -8)
+	switch.BackgroundColor3 = theme.ElementHover
+	switch.BorderSizePixel = 0
+	switch.Parent = frame
+
+	makeCorner(switch, 8)
+
+	local switchGradient = Instance.new("UIGradient")
+	switchGradient.Color = ColorSequence.new{
+		ColorSequenceKeypoint.new(0, theme.Accent[1]),
+		ColorSequenceKeypoint.new(1, theme.Accent[2]),
+	}
+	switchGradient.Rotation = 135
+	switchGradient.Enabled = false
+	switchGradient.Parent = switch
+
+	local thumb = Instance.new("Frame")
+	thumb.Size = UDim2.fromOffset(12, 12)
+	thumb.Position = UDim2.new(0, 2, 0.5, -6)
+	thumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	thumb.BorderSizePixel = 0
+	thumb.Parent = switch
+
+	makeCorner(thumb, 6)
+
+	-- Click handler
+	local button = Instance.new("TextButton")
+	button.Size = UDim2.fromScale(1, 1)
+	button.BackgroundTransparency = 1
+	button.Text = ""
+	button.AutoButtonColor = false
+	button.Parent = frame
+
+	local function update(value, animate)
+		elem._current = value
+		if animate == false then
+			thumb.Position = value and UDim2.new(0, 18, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)
+			switchGradient.Enabled = value
+		else
+			tween(thumb, 0.25, {Position = value and UDim2.new(0, 18, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)})
+			switchGradient.Enabled = value
+		end
+	end
+
+	button.MouseButton1Click:Connect(function()
+		if not elem._enabled then return end
+		update(not elem._current)
+		if elem._callback then
+			task.spawn(pcall, elem._callback, elem._current)
+		end
+		if elem._flag and window._configSave.Enabled then
+			window:SaveConfig()
+		end
+	end)
+
+	frame.MouseEnter:Connect(function()
+		tween(frame, 0.2, {BackgroundColor3 = theme.ElementHover})
+	end)
+	frame.MouseLeave:Connect(function()
+		tween(frame, 0.2, {BackgroundColor3 = theme.ElementBg})
+	end)
+
+	elem._frame = frame
+	elem._update = update
+
+	-- Apply default
+	update(elem._default == true, false)
+end
+
+VaenHub._ElementBuilders.Slider = function(self, elem)
+	local window = elem._window
+	local theme  = window._theme
+
+	elem._min = elem._min or 0
+	elem._max = elem._max or 100
+	elem._step = elem._step or 1
+	elem._current = elem._default or elem._min
+
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.new(1, 0, 0, 36)
+	frame.BackgroundColor3 = theme.ElementBg
+	frame.BorderSizePixel = 0
+	frame:SetAttribute("ThemeRole", "ElementBg")
+	frame.Parent = elem._tab._page
+
+	makeCorner(frame, 8)
+	makeGradientStroke(frame, theme, 0.94)
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromOffset(70, 36)
+	label.Position = UDim2.fromOffset(12, 0)
+	label.BackgroundTransparency = 1
+	label.Text = elem._name
+	label.Font = Enum.Font.Gotham
+	label.TextSize = 12
+	label.TextColor3 = theme.Text
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = frame
+
+	-- Value text
+	local valueText = Instance.new("TextLabel")
+	valueText.Size = UDim2.fromOffset(40, 36)
+	valueText.Position = UDim2.new(1, -52, 0, 0)
+	valueText.BackgroundTransparency = 1
+	valueText.Text = tostring(elem._current)
+	valueText.Font = Enum.Font.GothamMedium
+	valueText.TextSize = 11
+	valueText.TextColor3 = theme.TextDim
+	valueText.TextXAlignment = Enum.TextXAlignment.Right
+	valueText.Parent = frame
+
+	-- Track
+	local track = Instance.new("Frame")
+	track.Size = UDim2.new(1, -136, 0, 3)
+	track.Position = UDim2.new(0, 86, 0.5, -1)
+	track.BackgroundColor3 = theme.ElementHover
+	track.BorderSizePixel = 0
+	track.Parent = frame
+
+	makeCorner(track, 2)
+
+	-- Fill
+	local fill = Instance.new("Frame")
+	fill.Size = UDim2.fromScale(0, 1)
+	fill.BackgroundColor3 = theme.Accent[1]
+	fill.BorderSizePixel = 0
+	fill.Parent = track
+
+	makeCorner(fill, 2)
+
+	local fillGradient = Instance.new("UIGradient")
+	fillGradient.Color = ColorSequence.new{
+		ColorSequenceKeypoint.new(0, theme.Accent[1]),
+		ColorSequenceKeypoint.new(1, theme.Accent[2]),
+	}
+	fillGradient.Parent = fill
+
+	-- Thumb
+	local thumb = Instance.new("Frame")
+	thumb.Size = UDim2.fromOffset(10, 10)
+	thumb.AnchorPoint = Vector2.new(0.5, 0.5)
+	thumb.Position = UDim2.fromScale(0, 0.5)
+	thumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	thumb.BorderSizePixel = 0
+	thumb.Parent = fill
+
+	makeCorner(thumb, 5)
+
+	-- Drag logic
+	local dragging = false
+	local function setFromX(x)
+		local rel = math.clamp((x - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+		local raw = elem._min + rel * (elem._max - elem._min)
+		local snapped = math.floor(raw / elem._step + 0.5) * elem._step
+		snapped = math.clamp(snapped, elem._min, elem._max)
+		elem._current = snapped
+
+		local percent = (snapped - elem._min) / (elem._max - elem._min)
+		fill.Size = UDim2.fromScale(percent, 1)
+		thumb.Position = UDim2.new(1, 0, 0.5, 0)
+		valueText.Text = tostring(snapped) .. (elem._suffix and (" " .. elem._suffix) or "")
+
+		if elem._callback then
+			task.spawn(pcall, elem._callback, snapped)
+		end
+	end
+
+	track.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			setFromX(input.Position.X)
+		end
+	end)
+
+	local conn = UserInputService.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+			or input.UserInputType == Enum.UserInputType.Touch) then
+			setFromX(input.Position.X)
+		end
+	end)
+
+	local endConn = UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			if dragging and elem._flag and window._configSave.Enabled then
+				window:SaveConfig()
+			end
+			dragging = false
+		end
+	end)
+	table.insert(window._connections, conn)
+	table.insert(window._connections, endConn)
+
+	-- Init
+	local initPercent = (elem._current - elem._min) / (elem._max - elem._min)
+	fill.Size = UDim2.fromScale(initPercent, 1)
+
+	elem._frame = frame
+	elem._update = function(value)
+		elem._current = value
+		local p = (value - elem._min) / (elem._max - elem._min)
+		fill.Size = UDim2.fromScale(p, 1)
+		valueText.Text = tostring(value) .. (elem._suffix and (" " .. elem._suffix) or "")
+	end
+end
+
+VaenHub._ElementBuilders.Button = function(self, elem)
+	local window = elem._window
+	local theme  = window._theme
+
+	local frame = Instance.new("TextButton")
+	frame.Size = UDim2.new(1, 0, 0, 36)
+	frame.BackgroundColor3 = theme.ElementBg
+	frame.BorderSizePixel = 0
+	frame.Text = ""
+	frame.AutoButtonColor = false
+	frame.Parent = elem._tab._page
+
+	makeCorner(frame, 8)
+	makeGradientStroke(frame, theme, 0.94)
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, -24, 1, 0)
+	label.Position = UDim2.fromOffset(12, 0)
+	label.BackgroundTransparency = 1
+	label.Text = elem._name
+	label.Font = Enum.Font.GothamMedium
+	label.TextSize = 12
+	label.TextColor3 = theme.Text
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = frame
+
+	local arrow = Instance.new("TextLabel")
+	arrow.Size = UDim2.fromOffset(20, 20)
+	arrow.Position = UDim2.new(1, -28, 0.5, -10)
+	arrow.BackgroundTransparency = 1
+	arrow.Text = "›"
+	arrow.Font = Enum.Font.GothamBold
+	arrow.TextSize = 16
+	arrow.TextColor3 = theme.TextDim
+	arrow.Parent = frame
+
+	frame.MouseButton1Click:Connect(function()
+		if not elem._enabled then return end
+		if elem._callback then
+			task.spawn(pcall, elem._callback)
+		end
+		-- Click feedback
+		tween(frame, 0.1, {BackgroundColor3 = theme.Accent[1]})
+		task.wait(0.1)
+		tween(frame, 0.2, {BackgroundColor3 = theme.ElementBg})
+	end)
+
+	frame.MouseEnter:Connect(function()
+		tween(frame, 0.2, {BackgroundColor3 = theme.ElementHover})
+	end)
+	frame.MouseLeave:Connect(function()
+		tween(frame, 0.2, {BackgroundColor3 = theme.ElementBg})
+	end)
+
+	elem._frame = frame
+end
+
+VaenHub._ElementBuilders.Label = function(self, elem)
+	local theme = elem._window._theme
+
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.new(1, 0, 0, 24)
+	frame.BackgroundTransparency = 1
+	frame.Parent = elem._tab._page
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.Position = UDim2.fromOffset(4, 0)
+	label.BackgroundTransparency = 1
+	label.Text = elem._name
+	label.Font = Enum.Font.Gotham
+	label.TextSize = 12
+	label.TextColor3 = theme.TextDim
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = frame
+
+	elem._frame = frame
+	elem._update = function(value) label.Text = value end
+end
+
+VaenHub._ElementBuilders.Section = function(self, elem)
+	local theme = elem._window._theme
+
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.new(1, 0, 0, 26)
+	frame.BackgroundTransparency = 1
+	frame.Parent = elem._tab._page
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.Position = UDim2.fromOffset(4, 6)
+	label.BackgroundTransparency = 1
+	label.Text = elem._name
+	label.Font = Enum.Font.GothamBold
+	label.TextSize = 11
+	label.TextColor3 = theme.TextDim
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = frame
+
+	elem._frame = frame
+end
+
+VaenHub._ElementBuilders.Divider = function(self, elem)
+	local theme = elem._window._theme
+
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.new(1, 0, 0, 8)
+	frame.BackgroundTransparency = 1
+	frame.Parent = elem._tab._page
+
+	local line = Instance.new("Frame")
+	line.Size = UDim2.new(1, -8, 0, 1)
+	line.Position = UDim2.new(0, 4, 0.5, 0)
+	line.BackgroundColor3 = theme.Border
+	line.BackgroundTransparency = 0.7
+	line.BorderSizePixel = 0
+	line.Parent = frame
+
+	elem._frame = frame
+end
+
+VaenHub._ElementBuilders.Status = function(self, elem)
+	local theme = elem._window._theme
+
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.new(1, 0, 0, 32)
+	frame.BackgroundColor3 = theme.ElementBg
+	frame.BorderSizePixel = 0
+	frame.Parent = elem._tab._page
+
+	makeCorner(frame, 8)
+	makeGradientStroke(frame, theme, 0.94)
+
+	-- Pulsing dot
+	local dot = Instance.new("Frame")
+	dot.Size = UDim2.fromOffset(6, 6)
+	dot.Position = UDim2.new(0, 12, 0.5, -3)
+	dot.BackgroundColor3 = theme.Success
+	dot.BorderSizePixel = 0
+	dot.Parent = frame
+
+	makeCorner(dot, 3)
+
+	-- Pulse animation
+	task.spawn(function()
+		while frame.Parent do
+			tween(dot, 0.8, {BackgroundTransparency = 0.5}, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+			task.wait(0.8)
+			tween(dot, 0.8, {BackgroundTransparency = 0}, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+			task.wait(0.8)
+		end
+	end)
+
+	-- Name label
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Size = UDim2.fromOffset(60, 32)
+	nameLabel.Position = UDim2.fromOffset(26, 0)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Text = elem._name
+	nameLabel.Font = Enum.Font.Gotham
+	nameLabel.TextSize = 11
+	nameLabel.TextColor3 = theme.TextDim
+	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+	nameLabel.Parent = frame
+
+	-- Value label
+	local valLabel = Instance.new("TextLabel")
+	valLabel.Size = UDim2.new(1, -100, 1, 0)
+	valLabel.Position = UDim2.fromOffset(90, 0)
+	valLabel.BackgroundTransparency = 1
+	valLabel.Text = elem._content or "—"
+	valLabel.Font = Enum.Font.GothamMedium
+	valLabel.TextSize = 11
+	valLabel.TextColor3 = theme.Text
+	valLabel.TextXAlignment = Enum.TextXAlignment.Left
+	valLabel.Parent = frame
+
+	elem._frame = frame
+	elem._update = function(value) valLabel.Text = tostring(value) end
+	-- Override :Set behaviour
+	elem.Set = function(self, value)
+		self._current = value
+		valLabel.Text = tostring(value)
+		return self
+	end
+end
+
+VaenHub._ElementBuilders.Paragraph = function(self, elem)
+	local theme = elem._window._theme
+
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.new(1, 0, 0, 60)
+	frame.AutomaticSize = Enum.AutomaticSize.Y
+	frame.BackgroundColor3 = theme.ElementBg
+	frame.BorderSizePixel = 0
+	frame.Parent = elem._tab._page
+
+	makeCorner(frame, 8)
+	makeGradientStroke(frame, theme, 0.94)
+
+	local title = Instance.new("TextLabel")
+	title.Size = UDim2.new(1, -24, 0, 18)
+	title.Position = UDim2.fromOffset(12, 10)
+	title.BackgroundTransparency = 1
+	title.Text = elem._name
+	title.Font = Enum.Font.GothamMedium
+	title.TextSize = 12
+	title.TextColor3 = theme.Text
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.Parent = frame
+
+	local content = Instance.new("TextLabel")
+	content.Name = "Content"
+	content.Size = UDim2.new(1, -24, 0, 0)
+	content.AutomaticSize = Enum.AutomaticSize.Y
+	content.Position = UDim2.fromOffset(12, 32)
+	content.BackgroundTransparency = 1
+	content.Text = elem._content or ""
+	content.Font = Enum.Font.Gotham
+	content.TextSize = 11
+	content.TextColor3 = theme.TextDim
+	content.TextXAlignment = Enum.TextXAlignment.Left
+	content.TextYAlignment = Enum.TextYAlignment.Top
+	content.TextWrapped = true
+	content.Parent = frame
+
+	local pad = Instance.new("UIPadding")
+	pad.PaddingBottom = UDim.new(0, 10)
+	pad.Parent = frame
+
+	elem._frame = frame
+end
+
+VaenHub._ElementBuilders.Input = function(self, elem)
+	local window = elem._window
+	local theme  = window._theme
+
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.new(1, 0, 0, 36)
+	frame.BackgroundColor3 = theme.ElementBg
+	frame.BorderSizePixel = 0
+	frame.Parent = elem._tab._page
+
+	makeCorner(frame, 8)
+	makeGradientStroke(frame, theme, 0.94)
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(0.5, 0, 1, 0)
+	label.Position = UDim2.fromOffset(12, 0)
+	label.BackgroundTransparency = 1
+	label.Text = elem._name
+	label.Font = Enum.Font.Gotham
+	label.TextSize = 12
+	label.TextColor3 = theme.Text
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = frame
+
+	local inputBg = Instance.new("Frame")
+	inputBg.Size = UDim2.new(0.5, -20, 0, 24)
+	inputBg.Position = UDim2.new(0.5, 8, 0.5, -12)
+	inputBg.BackgroundColor3 = theme.ElementHover
+	inputBg.BorderSizePixel = 0
+	inputBg.Parent = frame
+
+	makeCorner(inputBg, 6)
+
+	local box = Instance.new("TextBox")
+	box.Size = UDim2.new(1, -16, 1, 0)
+	box.Position = UDim2.fromOffset(8, 0)
+	box.BackgroundTransparency = 1
+	box.Text = elem._default or ""
+	box.PlaceholderText = elem._placeholder or "..."
+	box.PlaceholderColor3 = theme.TextDim
+	box.Font = Enum.Font.Gotham
+	box.TextSize = 11
+	box.TextColor3 = theme.Text
+	box.TextXAlignment = Enum.TextXAlignment.Left
+	box.ClearTextOnFocus = false
+	box.Parent = inputBg
+
+	box.FocusLost:Connect(function()
+		elem._current = box.Text
+		if elem._callback then
+			task.spawn(pcall, elem._callback, box.Text)
+		end
+		if elem._flag and window._configSave.Enabled then
+			window:SaveConfig()
+		end
+	end)
+
+	elem._frame = frame
+	elem._update = function(value) box.Text = tostring(value) end
+end
+
+VaenHub._ElementBuilders.Keybind = function(self, elem)
+	local window = elem._window
+	local theme  = window._theme
+
+	elem._current = elem._default or "None"
+
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.new(1, 0, 0, 36)
+	frame.BackgroundColor3 = theme.ElementBg
+	frame.BorderSizePixel = 0
+	frame.Parent = elem._tab._page
+
+	makeCorner(frame, 8)
+	makeGradientStroke(frame, theme, 0.94)
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, -84, 1, 0)
+	label.Position = UDim2.fromOffset(12, 0)
+	label.BackgroundTransparency = 1
+	label.Text = elem._name
+	label.Font = Enum.Font.Gotham
+	label.TextSize = 12
+	label.TextColor3 = theme.Text
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = frame
+
+	local bindBox = Instance.new("TextButton")
+	bindBox.Size = UDim2.fromOffset(60, 22)
+	bindBox.Position = UDim2.new(1, -72, 0.5, -11)
+	bindBox.BackgroundColor3 = theme.ElementHover
+	bindBox.BorderSizePixel = 0
+	bindBox.Text = elem._current
+	bindBox.Font = Enum.Font.GothamMedium
+	bindBox.TextSize = 11
+	bindBox.TextColor3 = theme.Text
+	bindBox.AutoButtonColor = false
+	bindBox.Parent = frame
+
+	makeCorner(bindBox, 6)
+
+	local capturing = false
+	bindBox.MouseButton1Click:Connect(function()
+		capturing = true
+		bindBox.Text = "..."
+	end)
+
+	local conn = UserInputService.InputBegan:Connect(function(input, processed)
+		if capturing and input.KeyCode ~= Enum.KeyCode.Unknown then
+			capturing = false
+			local key = input.KeyCode.Name
+			elem._current = key
+			bindBox.Text = key
+			if elem._flag and window._configSave.Enabled then
+				window:SaveConfig()
+			end
+		elseif not capturing and not processed and input.KeyCode.Name == elem._current then
+			if elem._callback then
+				task.spawn(pcall, elem._callback, elem._current)
+			end
+		end
+	end)
+	table.insert(window._connections, conn)
+
+	elem._frame = frame
+	elem._update = function(value)
+		elem._current = value
+		bindBox.Text = tostring(value)
+	end
+end
+
+VaenHub._ElementBuilders.Dropdown = function(self, elem)
+	local window = elem._window
+	local theme  = window._theme
+
+	elem._options = elem._options or {}
+	if type(elem._current) ~= "table" then
+		elem._current = elem._default or {}
+		if type(elem._current) == "string" then
+			elem._current = {elem._current}
+		end
+	end
+
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.new(1, 0, 0, 36)
+	frame.BackgroundColor3 = theme.ElementBg
+	frame.BorderSizePixel = 0
+	frame.ClipsDescendants = true
+	frame.Parent = elem._tab._page
+
+	makeCorner(frame, 8)
+	makeGradientStroke(frame, theme, 0.94)
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(0.5, 0, 0, 36)
+	label.Position = UDim2.fromOffset(12, 0)
+	label.BackgroundTransparency = 1
+	label.Text = elem._name
+	label.Font = Enum.Font.Gotham
+	label.TextSize = 12
+	label.TextColor3 = theme.Text
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = frame
+
+	local selectedText = Instance.new("TextLabel")
+	selectedText.Size = UDim2.new(0.5, -36, 0, 36)
+	selectedText.Position = UDim2.new(0.5, 0, 0, 0)
+	selectedText.BackgroundTransparency = 1
+	selectedText.Text = #elem._current > 0 and table.concat(elem._current, ", ") or "None"
+	selectedText.Font = Enum.Font.Gotham
+	selectedText.TextSize = 11
+	selectedText.TextColor3 = theme.TextDim
+	selectedText.TextXAlignment = Enum.TextXAlignment.Right
+	selectedText.Parent = frame
+
+	local arrow = Instance.new("TextLabel")
+	arrow.Size = UDim2.fromOffset(20, 20)
+	arrow.Position = UDim2.new(1, -28, 0, 8)
+	arrow.BackgroundTransparency = 1
+	arrow.Text = "▾"
+	arrow.Font = Enum.Font.GothamBold
+	arrow.TextSize = 10
+	arrow.TextColor3 = theme.TextDim
+	arrow.Parent = frame
+
+	-- Options list (hidden by default)
+	local optionsList = Instance.new("Frame")
+	optionsList.Size = UDim2.new(1, -16, 0, 0)
+	optionsList.Position = UDim2.fromOffset(8, 38)
+	optionsList.BackgroundTransparency = 1
+	optionsList.Parent = frame
+
+	local listLayout = Instance.new("UIListLayout")
+	listLayout.Padding = UDim.new(0, 2)
+	listLayout.Parent = optionsList
+
+	local open = false
+	local function refreshOptions()
+		for _, c in ipairs(optionsList:GetChildren()) do
+			if c:IsA("TextButton") then c:Destroy() end
+		end
+
+		for _, opt in ipairs(elem._options) do
+			local optBtn = Instance.new("TextButton")
+			optBtn.Size = UDim2.new(1, 0, 0, 24)
+			optBtn.BackgroundColor3 = theme.ElementHover
+			optBtn.BorderSizePixel = 0
+			optBtn.Text = opt
+			optBtn.Font = Enum.Font.Gotham
+			optBtn.TextSize = 11
+			optBtn.TextColor3 = theme.TextDim
+			optBtn.AutoButtonColor = false
+			optBtn.Parent = optionsList
+
+			makeCorner(optBtn, 6)
+
+			-- Highlight if selected
+			local function refresh()
+				local isSel = table.find(elem._current, opt) ~= nil
+				optBtn.TextColor3 = isSel and theme.Text or theme.TextDim
+				optBtn.BackgroundColor3 = isSel and theme.Accent[1] or theme.ElementHover
+				optBtn.BackgroundTransparency = isSel and 0.7 or 0
+			end
+			refresh()
+
+			optBtn.MouseButton1Click:Connect(function()
+				local idx = table.find(elem._current, opt)
+				if elem._multi then
+					if idx then
+						table.remove(elem._current, idx)
+					else
+						table.insert(elem._current, opt)
+					end
+				else
+					elem._current = {opt}
+				end
+				selectedText.Text = #elem._current > 0 and table.concat(elem._current, ", ") or "None"
+				for _, child in ipairs(optionsList:GetChildren()) do
+					if child:IsA("TextButton") then
+						local isSel = table.find(elem._current, child.Text) ~= nil
+						child.TextColor3 = isSel and theme.Text or theme.TextDim
+						child.BackgroundColor3 = isSel and theme.Accent[1] or theme.ElementHover
+						child.BackgroundTransparency = isSel and 0.7 or 0
+					end
+				end
+				if elem._callback then
+					task.spawn(pcall, elem._callback, elem._current)
+				end
+				if elem._flag and window._configSave.Enabled then
+					window:SaveConfig()
+				end
+			end)
+		end
+	end
+	refreshOptions()
+
+	local button = Instance.new("TextButton")
+	button.Size = UDim2.new(1, 0, 0, 36)
+	button.BackgroundTransparency = 1
+	button.Text = ""
+	button.AutoButtonColor = false
+	button.Parent = frame
+
+	button.MouseButton1Click:Connect(function()
+		open = not open
+		local listHeight = #elem._options * 26 + 8
+		if open then
+			tween(frame, 0.3, {Size = UDim2.new(1, 0, 0, 36 + listHeight)})
+			tween(arrow, 0.3, {Rotation = 180})
+		else
+			tween(frame, 0.3, {Size = UDim2.new(1, 0, 0, 36)})
+			tween(arrow, 0.3, {Rotation = 0})
+		end
+	end)
+
+	elem._frame = frame
+	elem._refreshOptions = refreshOptions
+	elem._update = function(value)
+		elem._current = type(value) == "table" and value or {value}
+		selectedText.Text = #elem._current > 0 and table.concat(elem._current, ", ") or "None"
+		refreshOptions()
+	end
+end
+
+function VaenHub:_RefreshDropdown(elem)
+	if elem._refreshOptions then elem._refreshOptions() end
+end
+
+VaenHub._ElementBuilders.ColorPicker = function(self, elem)
+	-- Compact color picker
+	local window = elem._window
+	local theme  = window._theme
+
+	elem._current = elem._default or Color3.fromRGB(255, 255, 255)
+
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.new(1, 0, 0, 36)
+	frame.BackgroundColor3 = theme.ElementBg
+	frame.BorderSizePixel = 0
+	frame.Parent = elem._tab._page
+
+	makeCorner(frame, 8)
+	makeGradientStroke(frame, theme, 0.94)
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, -52, 1, 0)
+	label.Position = UDim2.fromOffset(12, 0)
+	label.BackgroundTransparency = 1
+	label.Text = elem._name
+	label.Font = Enum.Font.Gotham
+	label.TextSize = 12
+	label.TextColor3 = theme.Text
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = frame
+
+	local swatch = Instance.new("Frame")
+	swatch.Size = UDim2.fromOffset(28, 18)
+	swatch.Position = UDim2.new(1, -40, 0.5, -9)
+	swatch.BackgroundColor3 = elem._current
+	swatch.BorderSizePixel = 0
+	swatch.Parent = frame
+
+	makeCorner(swatch, 4)
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(255, 255, 255)
+	stroke.Transparency = 0.8
+	stroke.Thickness = 1
+	stroke.Parent = swatch
+
+	-- For full color picking, we'd need a complex popup. For now, click cycles through preset colors
+	-- (could be expanded later)
+	local button = Instance.new("TextButton")
+	button.Size = UDim2.fromScale(1, 1)
+	button.BackgroundTransparency = 1
+	button.Text = ""
+	button.AutoButtonColor = false
+	button.Parent = frame
+
+	local presetColors = {
+		Color3.fromRGB(255, 255, 255),
+		Color3.fromRGB(239, 68, 68),
+		Color3.fromRGB(250, 204, 21),
+		Color3.fromRGB(34, 197, 94),
+		Color3.fromRGB(56, 189, 248),
+		Color3.fromRGB(168, 85, 247),
+		Color3.fromRGB(244, 114, 182),
+	}
+	local cIdx = 1
+
+	button.MouseButton1Click:Connect(function()
+		cIdx = cIdx % #presetColors + 1
+		elem._current = presetColors[cIdx]
+		swatch.BackgroundColor3 = elem._current
+		if elem._callback then
+			task.spawn(pcall, elem._callback, elem._current)
+		end
+		if elem._flag and window._configSave.Enabled then
+			window:SaveConfig()
+		end
+	end)
+
+	elem._frame = frame
+	elem._update = function(value)
+		elem._current = value
+		swatch.BackgroundColor3 = value
+	end
+end
+
+VaenHub._ElementBuilders.SectionToggle = function(self, elem)
+	-- A section header with a master toggle
+	local theme = elem._window._theme
+
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.new(1, 0, 0, 30)
+	frame.BackgroundTransparency = 1
+	frame.Parent = elem._tab._page
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, -44, 1, 0)
+	label.Position = UDim2.fromOffset(4, 0)
+	label.BackgroundTransparency = 1
+	label.Text = elem._name
+	label.Font = Enum.Font.GothamBold
+	label.TextSize = 11
+	label.TextColor3 = theme.TextDim
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = frame
+
+	local switch = Instance.new("Frame")
+	switch.Size = UDim2.fromOffset(28, 14)
+	switch.Position = UDim2.new(1, -32, 0.5, -7)
+	switch.BackgroundColor3 = theme.ElementHover
+	switch.BorderSizePixel = 0
+	switch.Parent = frame
+
+	makeCorner(switch, 7)
+
+	local thumb = Instance.new("Frame")
+	thumb.Size = UDim2.fromOffset(10, 10)
+	thumb.Position = UDim2.new(0, 2, 0.5, -5)
+	thumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	thumb.BorderSizePixel = 0
+	thumb.Parent = switch
+
+	makeCorner(thumb, 5)
+
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.fromScale(1, 1)
+	btn.BackgroundTransparency = 1
+	btn.Text = ""
+	btn.AutoButtonColor = false
+	btn.Parent = frame
+
+	btn.MouseButton1Click:Connect(function()
+		elem._current = not elem._current
+		tween(thumb, 0.25, {Position = elem._current and UDim2.new(0, 16, 0.5, -5) or UDim2.new(0, 2, 0.5, -5)})
+		switch.BackgroundColor3 = elem._current and theme.Accent[1] or theme.ElementHover
+		if elem._callback then
+			task.spawn(pcall, elem._callback, elem._current)
+		end
+	end)
+
+	elem._frame = frame
+end
+
+function VaenHub:_UpdateElement(elem, value)
+	if elem._update then elem._update(value) end
+end
+
+function VaenHub:_SetElementEnabled(elem, enabled)
+	if elem._frame then
+		for _, descendant in ipairs(elem._frame:GetDescendants()) do
+			if descendant:IsA("TextLabel") or descendant:IsA("TextBox") or descendant:IsA("TextButton") then
+				descendant.TextTransparency = enabled and 0 or 0.6
+			end
+		end
+	end
+end
+
+
+--==============================================================
+-- NOTIFICATIONS
+--==============================================================
+VaenHub._notifQueue = {}
+VaenHub._notifActive = 0
+VaenHub._notifContainer = nil
+
+function VaenHub:_QueueNotification(data)
+	if not self._notifContainer then self:_CreateNotifContainer() end
+	if self._notifActive >= 4 then
+		table.insert(self._notifQueue, data)
+		return
+	end
+	self:_ShowNotification(data)
+end
+
+function VaenHub:_CreateNotifContainer()
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "VaenHubNotifs_" .. HttpService:GenerateGUID(false):sub(1, 6)
+	gui.IgnoreGuiInset = true
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	gui.DisplayOrder = 200
+
+	if gethui then
+		gui.Parent = gethui()
+	else
+		gui.Parent = CoreGui
+	end
+
+	local container = Instance.new("Frame")
+	container.AnchorPoint = Vector2.new(1, 1)
+	container.Position = UDim2.new(1, -20, 1, -20)
+	container.Size = UDim2.fromOffset(320, 400)
+	container.BackgroundTransparency = 1
+	container.Parent = gui
+
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0, 8)
+	layout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = container
+
+	self._notifContainer = container
+end
+
+function VaenHub:_ShowNotification(data)
+	self._notifActive = self._notifActive + 1
+	local theme = self.Presets.Phantom -- notifications use default theme
+
+	local notif = Instance.new("Frame")
+	notif.Size = UDim2.new(1, 0, 0, 60)
+	notif.BackgroundColor3 = theme.ElementBg
+	notif.BackgroundTransparency = 0
+	notif.BorderSizePixel = 0
+	notif.Parent = self._notifContainer
+
+	makeCorner(notif, 10)
+	makeGradientStroke(notif, theme, 0.85)
+
+	-- Accent stripe
+	local stripe = Instance.new("Frame")
+	stripe.Size = UDim2.fromOffset(3, 24)
+	stripe.Position = UDim2.fromOffset(0, 18)
+	stripe.BorderSizePixel = 0
+	if data.Type == "success" then stripe.BackgroundColor3 = theme.Success
+	elseif data.Type == "warning" then stripe.BackgroundColor3 = theme.Warning
+	elseif data.Type == "error" then stripe.BackgroundColor3 = theme.Danger
+	else stripe.BackgroundColor3 = theme.Accent[1] end
+	stripe.Parent = notif
+	makeCorner(stripe, 2)
+
+	local title = Instance.new("TextLabel")
+	title.Size = UDim2.new(1, -24, 0, 18)
+	title.Position = UDim2.fromOffset(14, 8)
+	title.BackgroundTransparency = 1
+	title.Text = data.Title
+	title.Font = Enum.Font.GothamMedium
+	title.TextSize = 12
+	title.TextColor3 = theme.Text
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.Parent = notif
+
+	local content = Instance.new("TextLabel")
+	content.Size = UDim2.new(1, -24, 0, 30)
+	content.Position = UDim2.fromOffset(14, 26)
+	content.BackgroundTransparency = 1
+	content.Text = data.Content
+	content.Font = Enum.Font.Gotham
+	content.TextSize = 11
+	content.TextColor3 = theme.TextDim
+	content.TextXAlignment = Enum.TextXAlignment.Left
+	content.TextYAlignment = Enum.TextYAlignment.Top
+	content.TextWrapped = true
+	content.Parent = notif
+
+	-- Slide in
+	notif.Position = UDim2.new(1, 0, 0, 0)
+	tween(notif, 0.4, {Position = UDim2.new(0, 0, 0, 0)})
+
+	task.delay(data.Duration, function()
+		tween(notif, 0.4, {BackgroundTransparency = 1})
+		tween(title, 0.4, {TextTransparency = 1})
+		tween(content, 0.4, {TextTransparency = 1})
+		task.wait(0.4)
+		notif:Destroy()
+		self._notifActive = self._notifActive - 1
+		if #self._notifQueue > 0 then
+			local nextData = table.remove(self._notifQueue, 1)
+			self:_ShowNotification(nextData)
+		end
+	end)
+end
+
+
+--==============================================================
+-- ANIMATION HELPERS (hide/show/minimise)
+--==============================================================
+function VaenHub:_AnimateHide(window)
+	if not window._main then return end
+	tween(window._main, 0.4, {Size = UDim2.fromOffset(620, 0)}, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
+	for _, descendant in ipairs(window._main:GetDescendants()) do
+		if descendant:IsA("TextLabel") or descendant:IsA("TextButton") or descendant:IsA("TextBox") then
+			tween(descendant, 0.3, {TextTransparency = 1})
+		elseif descendant:IsA("Frame") and descendant.BackgroundTransparency < 1 then
+			tween(descendant, 0.3, {BackgroundTransparency = 1})
+		end
+	end
+end
+
+function VaenHub:_AnimateShow(window)
+	if not window._main then return end
+	-- Reset transparencies
+	for _, descendant in ipairs(window._main:GetDescendants()) do
+		if descendant:IsA("TextLabel") or descendant:IsA("TextButton") or descendant:IsA("TextBox") then
+			descendant.TextTransparency = 0
+		end
+	end
+	tween(window._main, 0.5, {Size = UDim2.fromOffset(620, 400)})
+end
+
+function VaenHub:_AnimateMinimise(window, minimised)
+	if not window._main then return end
+	if minimised then
+		tween(window._main, 0.4, {Size = UDim2.fromOffset(620, 44)})
+		window._content.Visible = false
+		window._tabBar.Visible = false
+	else
+		window._content.Visible = true
+		window._tabBar.Visible = true
+		tween(window._main, 0.4, {Size = UDim2.fromOffset(620, 400)})
+	end
+end
+
+
+--==============================================================
+-- 11. UTILITIES
+--==============================================================
+function VaenHub:_MakeDraggable(frame, dragHandle)
+	local dragging, dragStart, startPos
+	dragHandle.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = frame.Position
+		end
+	end)
+	dragHandle.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+			or input.UserInputType == Enum.UserInputType.Touch) then
+			local delta = input.Position - dragStart
+			frame.Position = UDim2.new(
+				startPos.X.Scale,
+				startPos.X.Offset + delta.X,
+				startPos.Y.Scale,
+				startPos.Y.Offset + delta.Y
+			)
+		end
+	end)
+end
+
+
+--==============================================================
+-- 12. INIT / BOOT
+--==============================================================
+return VaenHub
