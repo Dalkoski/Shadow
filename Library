@@ -1,34 +1,33 @@
 --[[
 	╔══════════════════════════════════════════════════════════╗
-	║                    VaenHub v2.1                          ║
-	║       Modern Roblox UI by Dalkoski — mockup-matched      ║
+	║                    VaenHub v2.2                          ║
+	║          Clean fundamentals — by Dalkoski                ║
 	╚══════════════════════════════════════════════════════════╝
 
-	loadstring(game:HttpGet("YOUR_URL"))()
+	Usage:
+		local VaenHub = loadstring(game:HttpGet("URL"))()
+		local Window = VaenHub:CreateWindow({Name="MyHub"})
+		local Tab = Window:Tab("Main")
+		Tab:Toggle("Auto Farm"):Default(true):OnChange(function(v) end)
 
-	STRUCTURE:
-		1. PUBLIC API           — CreateWindow, Notify, Get, Destroy
-		2. WINDOW METHODS       — Tab, Protect, Save/LoadConfig, Hide/Show
-		3. TAB METHODS          — Toggle, Slider, Dropdown, etc
-		4. CHAINABLE BUILDERS   — Default, Range, OnChange, Flag, Icon, Set
-		5. PROTECTION LAYER     — AntiAFK, AntiKick, AutoRejoin, ServerHop
-		6. KEY SYSTEM           — full-screen blur + glass card
-		7. THEME PRESETS        — Phantom, Ocean, Sunset, Mono
-		8. ICON RESOLVER        — Lucide via getcustomasset
-		9. CONFIG SAVE/LOAD     — profiles, flag registry
-		10. UI BUILDERS         — frame creators
-		11. ELEMENT BUILDERS    — each element type
-		12. UTILITIES           — drag, tween, safe helpers
+	Sections:
+		1. CONFIG / CONSTANTS — colors, sizes, edit these
+		2. PUBLIC API
+		3. WINDOW METHODS
+		4. TAB METHODS
+		5. CHAINABLE ELEMENT BUILDERS
+		6. PROTECTION LAYER
+		7. KEY SYSTEM
+		8. ELEMENT BUILDERS (Toggle, Slider, etc)
+		9. CONFIG SAVE/LOAD
+		10. NOTIFICATIONS
+		11. UTILITIES
 ]]
 
 --==============================================================
 -- SERVICES
 --==============================================================
-local function svc(name)
-	local s = game:GetService(name)
-	return cloneref and cloneref(s) or s
-end
-
+local function svc(n) local s = game:GetService(n); return cloneref and cloneref(s) or s end
 local UserInputService = svc("UserInputService")
 local TweenService     = svc("TweenService")
 local Players          = svc("Players")
@@ -38,128 +37,49 @@ local RunService       = svc("RunService")
 local Lighting         = svc("Lighting")
 local TeleportService  = svc("TeleportService")
 local GuiService       = svc("GuiService")
+local LocalPlayer      = Players.LocalPlayer
 
-local LocalPlayer = Players.LocalPlayer
+--==============================================================
+-- 1. CONFIG / CONSTANTS
+--==============================================================
+local THEME = {
+	Background  = Color3.fromRGB(13, 13, 18),
+	Topbar      = Color3.fromRGB(17, 17, 24),
+	ElementBg   = Color3.fromRGB(22, 22, 30),
+	ElementHover= Color3.fromRGB(30, 30, 40),
+	Border      = Color3.fromRGB(40, 40, 55),
+	Text        = Color3.fromRGB(240, 240, 245),
+	TextDim     = Color3.fromRGB(155, 155, 168),
+	TextFaint   = Color3.fromRGB(105, 105, 120),
+	Accent      = Color3.fromRGB(139, 92, 246),  -- purple, single solid color
+	AccentDim   = Color3.fromRGB(99, 102, 241),  -- indigo
+	Success     = Color3.fromRGB(34, 197, 94),
+	Warning     = Color3.fromRGB(250, 204, 21),
+	Danger      = Color3.fromRGB(239, 68, 68),
+}
+
+local WINDOW_SIZE = Vector2.new(580, 380)
+local TOPBAR_HEIGHT = 42
+local TABBAR_HEIGHT = 38
+local ELEMENT_HEIGHT = 38
+local ELEMENT_SPACING = 6
+local CORNER_RADIUS = 8
 
 --==============================================================
 -- ROOT
 --==============================================================
 local VaenHub = {
-	Version = "2.1.0",
-	Flags   = {},
+	Version = "2.2.0",
+	Flags = {},
 	Windows = {},
-	_destroyed = false,
 }
 
--- Forward declarations
-local Window  = {}
-local Tab     = {}
-local Elem    = {}
-VaenHub._WindowMeta  = Window
-VaenHub._TabMeta     = Tab
-VaenHub._ElementMeta = Elem
+local Window = {}
+local Tab = {}
+local Elem = {}
 
 --==============================================================
--- 7. THEME PRESETS (defined early so everything can access)
---==============================================================
-VaenHub.Presets = {
-	Phantom = {
-		Background   = Color3.fromRGB(10, 10, 15),
-		Topbar       = Color3.fromRGB(13, 13, 19),
-		ElementBg    = Color3.fromRGB(18, 18, 26),
-		ElementHover = Color3.fromRGB(26, 26, 36),
-		Border       = Color3.fromRGB(40, 40, 55),
-		Text         = Color3.fromRGB(240, 240, 245),
-		TextDim      = Color3.fromRGB(155, 155, 168),
-		TextFaint    = Color3.fromRGB(110, 110, 125),
-		Accent       = {Color3.fromRGB(99, 102, 241), Color3.fromRGB(168, 85, 247)},
-		AccentGlow   = Color3.fromRGB(168, 85, 247),
-		Success      = Color3.fromRGB(34, 197, 94),
-		Warning      = Color3.fromRGB(250, 204, 21),
-		Danger       = Color3.fromRGB(239, 68, 68),
-	},
-	Ocean = {
-		Background   = Color3.fromRGB(8, 14, 22),
-		Topbar       = Color3.fromRGB(11, 19, 30),
-		ElementBg    = Color3.fromRGB(15, 24, 36),
-		ElementHover = Color3.fromRGB(22, 33, 48),
-		Border       = Color3.fromRGB(30, 50, 70),
-		Text         = Color3.fromRGB(230, 240, 250),
-		TextDim      = Color3.fromRGB(140, 160, 180),
-		TextFaint    = Color3.fromRGB(95, 115, 135),
-		Accent       = {Color3.fromRGB(56, 189, 248), Color3.fromRGB(14, 165, 233)},
-		AccentGlow   = Color3.fromRGB(56, 189, 248),
-		Success      = Color3.fromRGB(34, 197, 94),
-		Warning      = Color3.fromRGB(250, 204, 21),
-		Danger       = Color3.fromRGB(239, 68, 68),
-	},
-	Sunset = {
-		Background   = Color3.fromRGB(18, 10, 15),
-		Topbar       = Color3.fromRGB(24, 14, 21),
-		ElementBg    = Color3.fromRGB(30, 19, 27),
-		ElementHover = Color3.fromRGB(40, 27, 37),
-		Border       = Color3.fromRGB(60, 40, 55),
-		Text         = Color3.fromRGB(250, 240, 245),
-		TextDim      = Color3.fromRGB(180, 160, 170),
-		TextFaint    = Color3.fromRGB(130, 110, 120),
-		Accent       = {Color3.fromRGB(244, 114, 182), Color3.fromRGB(251, 146, 60)},
-		AccentGlow   = Color3.fromRGB(244, 114, 182),
-		Success      = Color3.fromRGB(34, 197, 94),
-		Warning      = Color3.fromRGB(250, 204, 21),
-		Danger       = Color3.fromRGB(239, 68, 68),
-	},
-	Mono = {
-		Background   = Color3.fromRGB(12, 12, 12),
-		Topbar       = Color3.fromRGB(16, 16, 16),
-		ElementBg    = Color3.fromRGB(20, 20, 20),
-		ElementHover = Color3.fromRGB(28, 28, 28),
-		Border       = Color3.fromRGB(45, 45, 45),
-		Text         = Color3.fromRGB(245, 245, 245),
-		TextDim      = Color3.fromRGB(160, 160, 160),
-		TextFaint    = Color3.fromRGB(110, 110, 110),
-		Accent       = {Color3.fromRGB(200, 200, 200), Color3.fromRGB(255, 255, 255)},
-		AccentGlow   = Color3.fromRGB(255, 255, 255),
-		Success      = Color3.fromRGB(34, 197, 94),
-		Warning      = Color3.fromRGB(250, 204, 21),
-		Danger       = Color3.fromRGB(239, 68, 68),
-	},
-}
-
---==============================================================
--- 8. ICON RESOLVER (Lucide via icons.lua bundled file)
---==============================================================
--- Loads Lucide icons. Returns {id, rectOffset, rectSize} or nil
-local Icons
-local iconLoadTried = false
-
-local function loadIcons()
-	if iconLoadTried then return Icons end
-	iconLoadTried = true
-	local ok, result = pcall(function()
-		return loadstring(game:HttpGet("https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/refs/heads/main/icons.lua"))()
-	end)
-	if ok then Icons = result end
-	return Icons
-end
-
-local function resolveIcon(name)
-	if not name or name == "" then return nil end
-	loadIcons()
-	if not Icons or not Icons["48px"] then return nil end
-	local key = string.lower(tostring(name)):match("^%s*(.*)%s*$")
-	local data = Icons["48px"][key]
-	if not data then return nil end
-	return {
-		id = "rbxassetid://" .. data[1],
-		rectOffset = Vector2.new(data[3][1], data[3][2]),
-		rectSize = Vector2.new(data[2][1], data[2][2]),
-	}
-end
-
-VaenHub._resolveIcon = resolveIcon
-
---==============================================================
--- UTILITY: tween, corner, stroke, gradient
+-- UTILS
 --==============================================================
 local function tween(obj, time, props, style, dir)
 	local t = TweenService:Create(obj, TweenInfo.new(time, style or Enum.EasingStyle.Quart, dir or Enum.EasingDirection.Out), props)
@@ -167,101 +87,74 @@ local function tween(obj, time, props, style, dir)
 	return t
 end
 
-local function corner(parent, radius)
-	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, radius)
-	c.Parent = parent
-	return c
+local function newInst(class, props, parent)
+	local i = Instance.new(class)
+	for k, v in pairs(props or {}) do i[k] = v end
+	if parent then i.Parent = parent end
+	return i
+end
+
+local function corner(parent, r)
+	return newInst("UICorner", {CornerRadius = UDim.new(0, r or CORNER_RADIUS)}, parent)
 end
 
 local function stroke(parent, color, transparency, thickness)
-	local s = Instance.new("UIStroke")
-	s.Color = color
-	s.Transparency = transparency or 0.9
-	s.Thickness = thickness or 1
-	s.Parent = parent
-	return s
+	return newInst("UIStroke", {
+		Color = color or THEME.Border,
+		Transparency = transparency or 0.5,
+		Thickness = thickness or 1,
+	}, parent)
 end
 
-local function gradient(parent, colors, rotation, transparency)
-	local g = Instance.new("UIGradient")
-	if typeof(colors) == "ColorSequence" then
-		g.Color = colors
-	else
-		local kp = {}
-		for i, c in ipairs(colors) do
-			table.insert(kp, ColorSequenceKeypoint.new((i-1)/(#colors-1), c))
-		end
-		g.Color = ColorSequence.new(kp)
-	end
-	g.Rotation = rotation or 0
-	if transparency then
-		g.Transparency = NumberSequence.new(transparency)
-	end
-	g.Parent = parent
-	return g
+local function padding(parent, t, r, b, l)
+	return newInst("UIPadding", {
+		PaddingTop    = UDim.new(0, t or 0),
+		PaddingRight  = UDim.new(0, r or 0),
+		PaddingBottom = UDim.new(0, b or 0),
+		PaddingLeft   = UDim.new(0, l or 0),
+	}, parent)
 end
 
-local function padding(parent, top, right, bottom, left)
-	local p = Instance.new("UIPadding")
-	p.PaddingTop    = UDim.new(0, top or 0)
-	p.PaddingRight  = UDim.new(0, right or 0)
-	p.PaddingBottom = UDim.new(0, bottom or 0)
-	p.PaddingLeft   = UDim.new(0, left or 0)
-	p.Parent = parent
-	return p
+local function listLayout(parent, pad, dir)
+	return newInst("UIListLayout", {
+		Padding = UDim.new(0, pad or 0),
+		FillDirection = dir or Enum.FillDirection.Vertical,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, parent)
 end
-
-local function listLayout(parent, padding, direction)
-	local l = Instance.new("UIListLayout")
-	l.Padding = UDim.new(0, padding or 0)
-	l.FillDirection = direction or Enum.FillDirection.Vertical
-	l.SortOrder = Enum.SortOrder.LayoutOrder
-	l.Parent = parent
-	return l
-end
-
-VaenHub._tween = tween
-VaenHub._corner = corner
-VaenHub._stroke = stroke
-VaenHub._gradient = gradient
 
 --==============================================================
--- 1. PUBLIC API
+-- 2. PUBLIC API
 --==============================================================
 function VaenHub:CreateWindow(config)
 	config = config or {}
-	local theme = self:_ResolveTheme(config.Theme)
 
 	local win = setmetatable({
-		_config      = config,
-		_theme       = theme,
-		_tabs        = {},
-		_elements    = {},
+		_config = config,
+		_tabs = {},
+		_elements = {},
 		_connections = {},
 		_unloadHooks = {},
-		_hidden      = false,
-		_minimised   = false,
-		_keybinds    = config.Keybinds or {Toggle = "K"},
-		_protect     = config.Protect or {},
-		_configSave  = config.Config or {},
-		_name        = config.Name or "VaenHub",
-		_version     = config.Version or "v2.0",
+		_hidden = false,
+		_minimised = false,
+		_keybinds = config.Keybinds or {Toggle = "K"},
+		_protect = config.Protect or {},
+		_configSave = config.Config or {},
+		_name = config.Name or "VaenHub",
+		_version = config.Version or "v2.2",
+		_currentTab = nil,
 	}, {__index = Window})
 
-	-- Key system first
+	-- Key system
 	if config.KeySystem and config.KeySystem.Enabled then
-		local passed = self:_RunKeySystem(win, config.KeySystem)
-		if not passed then return nil end
+		local ok = self:_RunKeySystem(win, config.KeySystem)
+		if not ok then return nil end
 	end
 
-	-- Build UI
 	self:_BuildWindow(win)
 
-	-- Protection
 	if win._protect then win:Protect(win._protect) end
 
-	-- Auto-load config
 	if win._configSave.Enabled then
 		task.delay(0.5, function() win:LoadConfig() end)
 	end
@@ -270,58 +163,36 @@ function VaenHub:CreateWindow(config)
 	return win
 end
 
-function VaenHub:Notify(data)
-	data = data or {}
+function VaenHub:Notify(d)
+	d = d or {}
 	self:_QueueNotif({
-		Title    = data.Title or "Notification",
-		Content  = data.Content or "",
-		Duration = data.Duration or 5,
-		Type     = data.Type or "default",
-		Icon     = data.Icon,
+		Title = d.Title or "Notification",
+		Content = d.Content or "",
+		Duration = d.Duration or 5,
+		Type = d.Type or "default",
 	})
 end
 
-function VaenHub:Get(flag)
-	return self.Flags[flag]
-end
+function VaenHub:Get(flag) return self.Flags[flag] end
 
 function VaenHub:Destroy()
-	self._destroyed = true
 	for _, w in ipairs(self.Windows) do pcall(function() w:Destroy() end) end
 	self.Windows = {}
 	self.Flags = {}
 end
 
-function VaenHub:_ResolveTheme(input)
-	if type(input) == "string" then
-		return self.Presets[input] or self.Presets.Phantom
-	end
-	if type(input) == "table" then
-		local base = {}
-		for k, v in pairs(self.Presets.Phantom) do base[k] = v end
-		for k, v in pairs(input) do base[k] = v end
-		return base
-	end
-	return self.Presets.Phantom
-end
-
 --==============================================================
--- 2. WINDOW METHODS
+-- 3. WINDOW METHODS
 --==============================================================
-function Window:Tab(name, iconName)
+function Window:Tab(name)
 	local t = setmetatable({
-		_name     = name,
-		_icon     = iconName,
-		_window   = self,
+		_name = name,
+		_window = self,
 		_elements = {},
 	}, {__index = Tab})
-
 	VaenHub:_BuildTab(self, t)
 	table.insert(self._tabs, t)
-
-	if #self._tabs == 1 then
-		self:_SelectTab(t)
-	end
+	if #self._tabs == 1 then self:_SelectTab(t) end
 	return t
 end
 
@@ -338,23 +209,17 @@ function Window:Protect(opts)
 end
 
 function Window:OnUnload(cb) table.insert(self._unloadHooks, cb) end
-
-function Window:SaveConfig(profile) VaenHub:_SaveConfig(self, profile or "default") end
-function Window:LoadConfig(profile) VaenHub:_LoadConfig(self, profile or "default") end
-
-function Window:SetTheme(t)
-	self._theme = VaenHub:_ResolveTheme(t)
-	VaenHub:_ApplyTheme(self)
-end
+function Window:SaveConfig(p) VaenHub:_SaveConfig(self, p or "default") end
+function Window:LoadConfig(p) VaenHub:_LoadConfig(self, p or "default") end
 
 function Window:Hide()
 	self._hidden = true
-	VaenHub:_AnimateHide(self)
+	tween(self._main, 0.3, {Size = UDim2.fromOffset(WINDOW_SIZE.X, 0)}, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
 end
 
 function Window:Show()
 	self._hidden = false
-	VaenHub:_AnimateShow(self)
+	tween(self._main, 0.4, {Size = UDim2.fromOffset(WINDOW_SIZE.X, WINDOW_SIZE.Y)})
 end
 
 function Window:Toggle()
@@ -363,7 +228,16 @@ end
 
 function Window:Minimise()
 	self._minimised = not self._minimised
-	VaenHub:_AnimateMinimise(self)
+	if self._minimised then
+		self._content.Visible = false
+		self._tabBar.Visible = false
+		tween(self._main, 0.3, {Size = UDim2.fromOffset(WINDOW_SIZE.X, TOPBAR_HEIGHT)})
+	else
+		tween(self._main, 0.3, {Size = UDim2.fromOffset(WINDOW_SIZE.X, WINDOW_SIZE.Y)})
+		task.wait(0.2)
+		self._content.Visible = true
+		self._tabBar.Visible = true
+	end
 end
 
 function Window:Destroy()
@@ -373,26 +247,24 @@ function Window:Destroy()
 end
 
 function Window:_SelectTab(tab)
-	local theme = self._theme
 	for _, t in ipairs(self._tabs) do
 		local selected = (t == tab)
 		t._page.Visible = selected
-		if t._pillGradient then
-			t._pillGradient.Transparency = NumberSequence.new(selected and 0.7 or 1)
-		end
-		tween(t._buttonLabel, 0.25, {TextColor3 = selected and theme.Text or theme.TextDim})
-		if t._buttonIcon then
-			tween(t._buttonIcon, 0.25, {ImageColor3 = selected and theme.Text or theme.TextDim})
-		end
-		if t._buttonStroke then
-			tween(t._buttonStroke, 0.25, {Transparency = selected and 0.65 or 1})
+		if selected then
+			tween(t._button, 0.2, {BackgroundColor3 = THEME.Accent, BackgroundTransparency = 0})
+			tween(t._buttonLabel, 0.2, {TextColor3 = THEME.Text})
+			tween(t._activeDot, 0.2, {BackgroundTransparency = 0})
+		else
+			tween(t._button, 0.2, {BackgroundColor3 = THEME.ElementBg, BackgroundTransparency = 1})
+			tween(t._buttonLabel, 0.2, {TextColor3 = THEME.TextDim})
+			tween(t._activeDot, 0.2, {BackgroundTransparency = 1})
 		end
 	end
 	self._currentTab = tab
 end
 
 --==============================================================
--- 3. TAB METHODS
+-- 4. TAB METHODS
 --==============================================================
 function Tab:Toggle(name)      return VaenHub:_NewElement(self, "Toggle", name) end
 function Tab:Slider(name)      return VaenHub:_NewElement(self, "Slider", name) end
@@ -408,7 +280,7 @@ function Tab:Status(name)      return VaenHub:_NewElement(self, "Status", name) 
 function Tab:Divider()         return VaenHub:_NewElement(self, "Divider", "") end
 
 --==============================================================
--- 4. CHAINABLE BUILDERS
+-- 5. CHAINABLE BUILDERS
 --==============================================================
 function Elem:Default(v) self._default = v; self._current = v; return self end
 function Elem:Range(a,b) self._min, self._max = a, b; return self end
@@ -417,7 +289,7 @@ function Elem:Suffix(s) self._suffix = s; return self end
 function Elem:Options(o) self._options = o; return self end
 function Elem:Multi(e) self._multi = e ~= false; return self end
 function Elem:Placeholder(p) self._placeholder = p; return self end
-function Elem:Icon(i) self._icon = i; return self end
+
 function Elem:Content(c)
 	self._content = c
 	if self._setContent then self._setContent(c) end
@@ -432,14 +304,13 @@ end
 
 function Elem:OnChange(cb)
 	self._callback = cb
-	if not self._built then VaenHub:_MaterializeElement(self) end
+	if not self._built then VaenHub:_Build(self) end
 	return self
 end
-
 Elem.OnClick = Elem.OnChange
 
 function Elem:Build()
-	if not self._built then VaenHub:_MaterializeElement(self) end
+	if not self._built then VaenHub:_Build(self) end
 	return self
 end
 
@@ -452,14 +323,14 @@ end
 
 function Elem:Get() return self._current end
 
-function Elem:Refresh(opts)
-	self._options = opts
-	if self._refreshOptions then self._refreshOptions() end
+function Elem:Refresh(o)
+	self._options = o
+	if self._refresh then self._refresh() end
 	return self
 end
 
 --==============================================================
--- 5. PROTECTION LAYER
+-- 6. PROTECTION LAYER
 --==============================================================
 function VaenHub:_HideFromCoreGui(win)
 	if not win._gui then return end
@@ -467,10 +338,10 @@ function VaenHub:_HideFromCoreGui(win)
 	local done = false
 	if gethui then pcall(function() win._gui.Parent = gethui() done = true end) end
 	if not done and syn and syn.protect_gui then
-		pcall(function() syn.protect_gui(win._gui) win._gui.Parent = CoreGui done = true end)
+		pcall(function() syn.protect_gui(win._gui); win._gui.Parent = CoreGui; done = true end)
 	end
 	if not done and protectgui then
-		pcall(function() protectgui(win._gui) win._gui.Parent = CoreGui done = true end)
+		pcall(function() protectgui(win._gui); win._gui.Parent = CoreGui; done = true end)
 	end
 	if not done then pcall(function() win._gui.Parent = CoreGui end) end
 end
@@ -510,9 +381,7 @@ function VaenHub:_AutoRejoin(win)
 	local c = GuiService.ErrorMessageChanged:Connect(function(msg)
 		if msg and msg ~= "" then
 			task.wait(2)
-			pcall(function()
-				TeleportService:TeleportToPlaceInstance(pid, jid, LocalPlayer)
-			end)
+			pcall(function() TeleportService:TeleportToPlaceInstance(pid, jid, LocalPlayer) end)
 		end
 	end)
 	table.insert(win._connections, c)
@@ -522,36 +391,32 @@ function VaenHub:_ServerHop(win, opts)
 	win._serverHop = function()
 		local req = (syn and syn.request) or http_request or request
 		if not req then return false end
-		local servers = {}
 		local ok, resp = pcall(function()
-			return req({Url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100", game.PlaceId), Method = "GET"})
+			return req({Url = "https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100", Method="GET"})
 		end)
 		if not ok or not resp then return false end
 		local data = HttpService:JSONDecode(resp.Body)
 		if not data or not data.data then return false end
+		local servers = {}
 		for _, s in ipairs(data.data) do
 			if s.id ~= game.JobId and s.playing < s.maxPlayers then
 				table.insert(servers, s)
 			end
 		end
 		if #servers == 0 then return false end
-		if opts.PreferLow then
-			table.sort(servers, function(a,b) return a.playing < b.playing end)
-		end
+		if opts.PreferLow then table.sort(servers, function(a,b) return a.playing < b.playing end) end
 		TeleportService:TeleportToPlaceInstance(game.PlaceId, servers[1].id, LocalPlayer)
 		return true
 	end
 end
 
 --==============================================================
--- 6. KEY SYSTEM (full-screen blur + glass card, gradient verify)
+-- 7. KEY SYSTEM (purple solid Verify, glowing dot, clean)
 --==============================================================
 function VaenHub:_RunKeySystem(win, ks)
-	local theme = win._theme
-
-	-- Check saved key
+	-- Saved key check
 	if ks.SaveKey and isfile then
-		local path = "VaenHub/Keys/" .. (ks.FileName or "key") .. ".key"
+		local path = "VaenHub/Keys/"..(ks.FileName or "key")..".key"
 		if isfile(path) then
 			local ok, saved = pcall(readfile, path)
 			if ok then
@@ -563,180 +428,186 @@ function VaenHub:_RunKeySystem(win, ks)
 	end
 
 	-- Build UI
-	local gui = Instance.new("ScreenGui")
-	gui.Name = HttpService:GenerateGUID(false):sub(1,8)
-	gui.IgnoreGuiInset = true
-	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	gui.DisplayOrder = 999
-	gui.ResetOnSpawn = false
-
+	local gui = newInst("ScreenGui", {
+		Name = HttpService:GenerateGUID(false):sub(1,8),
+		IgnoreGuiInset = true,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		DisplayOrder = 999,
+		ResetOnSpawn = false,
+	})
 	if gethui then gui.Parent = gethui()
-	elseif syn and syn.protect_gui then syn.protect_gui(gui) gui.Parent = CoreGui
+	elseif syn and syn.protect_gui then syn.protect_gui(gui); gui.Parent = CoreGui
 	else gui.Parent = CoreGui end
 
-	-- Lighting blur
-	local blur = Instance.new("BlurEffect")
-	blur.Size = 0
-	blur.Parent = Lighting
-	tween(blur, 0.6, {Size = 24})
+	-- Blur
+	local blur = newInst("BlurEffect", {Size = 0}, Lighting)
+	tween(blur, 0.5, {Size = 22})
 
 	-- Dim overlay
-	local dim = Instance.new("Frame")
-	dim.Size = UDim2.fromScale(1,1)
-	dim.BackgroundColor3 = Color3.new(0,0,0)
-	dim.BackgroundTransparency = 1
-	dim.BorderSizePixel = 0
-	dim.Parent = gui
-	tween(dim, 0.5, {BackgroundTransparency = 0.55})
+	local dim = newInst("Frame", {
+		Size = UDim2.fromScale(1,1),
+		BackgroundColor3 = Color3.new(0,0,0),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+	}, gui)
+	tween(dim, 0.4, {BackgroundTransparency = 0.55})
 
 	-- Card
-	local card = Instance.new("Frame")
-	card.AnchorPoint = Vector2.new(0.5, 0.5)
-	card.Position = UDim2.fromScale(0.5, 0.5)
-	card.Size = UDim2.fromOffset(420, 0)
-	card.BackgroundColor3 = theme.Background
-	card.BackgroundTransparency = 0.05
-	card.BorderSizePixel = 0
-	card.ClipsDescendants = true
-	card.Parent = gui
-	corner(card, 14)
+	local card = newInst("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(420, 0),
+		BackgroundColor3 = THEME.Background,
+		BorderSizePixel = 0,
+		ClipsDescendants = true,
+	}, gui)
+	corner(card, 12)
 	stroke(card, Color3.fromRGB(255,255,255), 0.88)
 
-	-- Top accent bar (gradient)
-	local accentBar = Instance.new("Frame")
-	accentBar.Size = UDim2.new(1, 0, 0, 2)
-	accentBar.BackgroundColor3 = theme.Accent[1]
-	accentBar.BorderSizePixel = 0
-	accentBar.ZIndex = 3
-	accentBar.Parent = card
-	gradient(accentBar, theme.Accent, 0)
+	-- Top accent bar (solid purple, thin)
+	local accentBar = newInst("Frame", {
+		Size = UDim2.new(1, 0, 0, 2),
+		BackgroundColor3 = THEME.Accent,
+		BorderSizePixel = 0,
+		ZIndex = 3,
+	}, card)
 
-	-- Phantom V watermark
-	local phantom = Instance.new("TextLabel")
-	phantom.Size = UDim2.fromOffset(260, 260)
-	phantom.AnchorPoint = Vector2.new(1, 1)
-	phantom.Position = UDim2.new(1, 20, 1, 20)
-	phantom.BackgroundTransparency = 1
-	phantom.Text = "V"
-	phantom.Font = Enum.Font.GothamBold
-	phantom.TextSize = 240
-	phantom.TextColor3 = Color3.fromRGB(255, 255, 255)
-	phantom.TextTransparency = 0.96
-	phantom.TextXAlignment = Enum.TextXAlignment.Right
-	phantom.TextYAlignment = Enum.TextYAlignment.Bottom
-	phantom.ZIndex = 0
-	phantom.Parent = card
+	-- Logo (small purple square in top-left)
+	local logo = newInst("Frame", {
+		Size = UDim2.fromOffset(24, 24),
+		Position = UDim2.fromOffset(20, 20),
+		BackgroundColor3 = THEME.Accent,
+		BorderSizePixel = 0,
+	}, card)
+	corner(logo, 6)
+	newInst("TextLabel", {
+		Size = UDim2.fromScale(1,1),
+		BackgroundTransparency = 1,
+		Text = "V",
+		Font = Enum.Font.GothamBold,
+		TextSize = 13,
+		TextColor3 = Color3.fromRGB(255,255,255),
+	}, logo)
 
 	-- Title
-	local title = Instance.new("TextLabel")
-	title.Size = UDim2.new(1, -60, 0, 22)
-	title.Position = UDim2.fromOffset(24, 26)
-	title.BackgroundTransparency = 1
-	title.Text = ks.Title or win._name
-	title.Font = Enum.Font.GothamMedium
-	title.TextSize = 16
-	title.TextColor3 = theme.Text
-	title.TextXAlignment = Enum.TextXAlignment.Left
-	title.TextTransparency = 1
-	title.Parent = card
+	local title = newInst("TextLabel", {
+		Size = UDim2.new(1, -80, 0, 22),
+		Position = UDim2.fromOffset(56, 18),
+		BackgroundTransparency = 1,
+		Text = ks.Title or win._name,
+		Font = Enum.Font.GothamBold,
+		TextSize = 15,
+		TextColor3 = THEME.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTransparency = 1,
+	}, card)
 
 	-- Subtitle
-	local sub = Instance.new("TextLabel")
-	sub.Size = UDim2.new(1, -60, 0, 16)
-	sub.Position = UDim2.fromOffset(24, 50)
-	sub.BackgroundTransparency = 1
-	sub.Text = ks.Subtitle or "Authentication required"
-	sub.Font = Enum.Font.Gotham
-	sub.TextSize = 12
-	sub.TextColor3 = theme.TextDim
-	sub.TextXAlignment = Enum.TextXAlignment.Left
-	sub.TextTransparency = 1
-	sub.Parent = card
-
-	-- Note
-	local note = Instance.new("TextLabel")
-	note.Size = UDim2.new(1, -48, 0, 16)
-	note.Position = UDim2.fromOffset(24, 86)
-	note.BackgroundTransparency = 1
-	note.Text = ks.Note or "Enter your access key to continue."
-	note.Font = Enum.Font.Gotham
-	note.TextSize = 12
-	note.TextColor3 = theme.TextFaint
-	note.TextXAlignment = Enum.TextXAlignment.Left
-	note.TextTransparency = 1
-	note.Parent = card
-
-	-- Input
-	local inputFrame = Instance.new("Frame")
-	inputFrame.Size = UDim2.new(1, -48, 0, 40)
-	inputFrame.Position = UDim2.fromOffset(24, 122)
-	inputFrame.BackgroundColor3 = theme.ElementBg
-	inputFrame.BackgroundTransparency = 0.2
-	inputFrame.BorderSizePixel = 0
-	inputFrame.Parent = card
-	corner(inputFrame, 8)
-	local inputStrokeObj = stroke(inputFrame, Color3.fromRGB(255,255,255), 0.88)
-
-	local inputBox = Instance.new("TextBox")
-	inputBox.Size = UDim2.new(1, -24, 1, 0)
-	inputBox.Position = UDim2.fromOffset(12, 0)
-	inputBox.BackgroundTransparency = 1
-	inputBox.Text = ""
-	inputBox.PlaceholderText = "Enter key..."
-	inputBox.PlaceholderColor3 = theme.TextFaint
-	inputBox.Font = Enum.Font.Gotham
-	inputBox.TextSize = 13
-	inputBox.TextColor3 = theme.Text
-	inputBox.TextXAlignment = Enum.TextXAlignment.Left
-	inputBox.ClearTextOnFocus = false
-	inputBox.Parent = inputFrame
-
-	inputBox.Focused:Connect(function()
-		tween(inputStrokeObj, 0.2, {Color = theme.Accent[1], Transparency = 0.4})
-	end)
-	inputBox.FocusLost:Connect(function()
-		tween(inputStrokeObj, 0.2, {Color = Color3.fromRGB(255,255,255), Transparency = 0.88})
-	end)
-
-	-- Verify button (gradient)
-	local verify = Instance.new("TextButton")
-	verify.Size = UDim2.new(1, -48, 0, 40)
-	verify.Position = UDim2.fromOffset(24, 178)
-	verify.BackgroundColor3 = theme.Accent[1]
-	verify.BorderSizePixel = 0
-	verify.Text = "Verify"
-	verify.Font = Enum.Font.GothamMedium
-	verify.TextSize = 13
-	verify.TextColor3 = Color3.fromRGB(255, 255, 255)
-	verify.AutoButtonColor = false
-	verify.Parent = card
-	corner(verify, 8)
-	gradient(verify, theme.Accent, 135)
+	local sub = newInst("TextLabel", {
+		Size = UDim2.new(1, -80, 0, 14),
+		Position = UDim2.fromOffset(56, 38),
+		BackgroundTransparency = 1,
+		Text = ks.Subtitle or "Authentication",
+		Font = Enum.Font.Gotham,
+		TextSize = 11,
+		TextColor3 = THEME.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTransparency = 1,
+	}, card)
 
 	-- Close
-	local close = Instance.new("TextButton")
-	close.Size = UDim2.fromOffset(28, 28)
-	close.Position = UDim2.new(1, -38, 0, 12)
-	close.BackgroundTransparency = 1
-	close.Text = "×"
-	close.Font = Enum.Font.GothamBold
-	close.TextSize = 22
-	close.TextColor3 = theme.TextDim
-	close.AutoButtonColor = false
-	close.Parent = card
+	local close = newInst("TextButton", {
+		Size = UDim2.fromOffset(28, 28),
+		Position = UDim2.new(1, -36, 0, 16),
+		BackgroundTransparency = 1,
+		Text = "×",
+		Font = Enum.Font.GothamBold,
+		TextSize = 22,
+		TextColor3 = THEME.TextDim,
+		AutoButtonColor = false,
+	}, card)
+	close.MouseEnter:Connect(function() tween(close, 0.15, {TextColor3 = THEME.Text}) end)
+	close.MouseLeave:Connect(function() tween(close, 0.15, {TextColor3 = THEME.TextDim}) end)
+
+	-- Note (instruction text)
+	local note = newInst("TextLabel", {
+		Size = UDim2.new(1, -40, 0, 32),
+		Position = UDim2.fromOffset(20, 78),
+		BackgroundTransparency = 1,
+		Text = ks.Note or "Enter your access key below.",
+		Font = Enum.Font.Gotham,
+		TextSize = 12,
+		TextColor3 = THEME.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextWrapped = true,
+		TextTransparency = 1,
+	}, card)
+
+	-- Input
+	local inputFrame = newInst("Frame", {
+		Size = UDim2.new(1, -40, 0, 38),
+		Position = UDim2.fromOffset(20, 120),
+		BackgroundColor3 = THEME.ElementBg,
+		BorderSizePixel = 0,
+	}, card)
+	corner(inputFrame, 8)
+	local inputStrokeObj = stroke(inputFrame, THEME.Border, 0.5)
+
+	local inputBox = newInst("TextBox", {
+		Size = UDim2.new(1, -24, 1, 0),
+		Position = UDim2.fromOffset(12, 0),
+		BackgroundTransparency = 1,
+		Text = "",
+		PlaceholderText = "Enter key...",
+		PlaceholderColor3 = THEME.TextFaint,
+		Font = Enum.Font.Gotham,
+		TextSize = 13,
+		TextColor3 = THEME.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ClearTextOnFocus = false,
+	}, inputFrame)
+
+	inputBox.Focused:Connect(function()
+		tween(inputStrokeObj, 0.2, {Color = THEME.Accent, Transparency = 0.3})
+	end)
+	inputBox.FocusLost:Connect(function()
+		tween(inputStrokeObj, 0.2, {Color = THEME.Border, Transparency = 0.5})
+	end)
+
+	-- Verify button (SOLID purple, no gradient)
+	local verify = newInst("TextButton", {
+		Size = UDim2.new(1, -40, 0, 38),
+		Position = UDim2.fromOffset(20, 170),
+		BackgroundColor3 = THEME.Accent,
+		BorderSizePixel = 0,
+		Text = "Verify",
+		Font = Enum.Font.GothamMedium,
+		TextSize = 13,
+		TextColor3 = Color3.fromRGB(255,255,255),
+		AutoButtonColor = false,
+	}, card)
+	corner(verify, 8)
+
+	verify.MouseEnter:Connect(function()
+		tween(verify, 0.15, {BackgroundColor3 = Color3.fromRGB(155, 110, 255)})
+	end)
+	verify.MouseLeave:Connect(function()
+		tween(verify, 0.15, {BackgroundColor3 = THEME.Accent})
+	end)
 
 	-- Animate in
-	tween(card, 0.5, {Size = UDim2.fromOffset(420, 238)})
+	tween(card, 0.45, {Size = UDim2.fromOffset(420, 230)})
 	task.wait(0.2)
-	tween(title, 0.4, {TextTransparency = 0})
-	task.wait(0.05)
-	tween(sub, 0.4, {TextTransparency = 0})
-	task.wait(0.05)
-	tween(note, 0.4, {TextTransparency = 0})
+	tween(title, 0.3, {TextTransparency = 0})
+	task.wait(0.04)
+	tween(sub, 0.3, {TextTransparency = 0})
+	task.wait(0.04)
+	tween(note, 0.3, {TextTransparency = 0})
 
 	-- Verify logic
 	local result = nil
 	local attempts = ks.MaxAttempts or 5
+
 	local function doVerify()
 		for _, k in ipairs(ks.Keys or {}) do
 			if inputBox.Text == k then
@@ -754,14 +625,14 @@ function VaenHub:_RunKeySystem(win, ks)
 		attempts = attempts - 1
 		-- Shake
 		local op = card.Position
-		for i = 1, 3 do
-			card.Position = op + UDim2.fromOffset(8, 0); task.wait(0.04)
-			card.Position = op + UDim2.fromOffset(-8, 0); task.wait(0.04)
+		for _ = 1, 3 do
+			card.Position = op + UDim2.fromOffset(7, 0); task.wait(0.04)
+			card.Position = op + UDim2.fromOffset(-7, 0); task.wait(0.04)
 		end
 		card.Position = op
-		tween(inputStrokeObj, 0.3, {Color = theme.Danger, Transparency = 0.4})
-		task.wait(0.3)
-		tween(inputStrokeObj, 0.3, {Color = Color3.fromRGB(255,255,255), Transparency = 0.88})
+		tween(inputStrokeObj, 0.2, {Color = THEME.Danger, Transparency = 0.3})
+		task.wait(0.5)
+		tween(inputStrokeObj, 0.2, {Color = THEME.Border, Transparency = 0.5})
 		inputBox.Text = ""
 		if attempts <= 0 then result = false end
 	end
@@ -770,204 +641,192 @@ function VaenHub:_RunKeySystem(win, ks)
 	inputBox.FocusLost:Connect(function(enter) if enter then doVerify() end end)
 	close.MouseButton1Click:Connect(function() result = false end)
 
-	verify.MouseEnter:Connect(function() tween(verify, 0.2, {Size = UDim2.new(1, -44, 0, 40)}) end)
-	verify.MouseLeave:Connect(function() tween(verify, 0.2, {Size = UDim2.new(1, -48, 0, 40)}) end)
-
 	while result == nil do task.wait() end
 
-	-- Fade out
-	tween(blur, 0.4, {Size = 0})
-	tween(dim, 0.4, {BackgroundTransparency = 1})
-	tween(card, 0.4, {Size = UDim2.fromOffset(420, 0)}, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
-	task.wait(0.45)
+	tween(blur, 0.3, {Size = 0})
+	tween(dim, 0.3, {BackgroundTransparency = 1})
+	tween(card, 0.3, {Size = UDim2.fromOffset(420, 0)}, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
+	task.wait(0.35)
 	pcall(function() blur:Destroy() end)
 	gui:Destroy()
 	return result
 end
 
 --==============================================================
--- 10. UI BUILDERS — main window
+-- WINDOW BUILDER
 --==============================================================
 function VaenHub:_BuildWindow(win)
-	local theme = win._theme
-
 	-- GUI
-	local gui = Instance.new("ScreenGui")
-	gui.Name = "VaenHub_" .. HttpService:GenerateGUID(false):sub(1,6)
-	gui.IgnoreGuiInset = true
-	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	gui.ResetOnSpawn = false
-	gui.DisplayOrder = 100
+	local gui = newInst("ScreenGui", {
+		Name = "VaenHub_"..HttpService:GenerateGUID(false):sub(1,6),
+		IgnoreGuiInset = true,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		ResetOnSpawn = false,
+		DisplayOrder = 100,
+	})
 	win._gui = gui
-
 	if not (win._protect and win._protect.HideUI) then
 		gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 	end
 
 	-- Main container
-	local main = Instance.new("Frame")
-	main.Name = "Main"
-	main.AnchorPoint = Vector2.new(0.5, 0.5)
-	main.Position = UDim2.fromScale(0.5, 0.5)
-	main.Size = UDim2.fromOffset(620, 420)
-	main.BackgroundColor3 = theme.Background
-	main.BorderSizePixel = 0
-	main.ClipsDescendants = true
-	main.Parent = gui
-	corner(main, 14)
-	stroke(main, Color3.fromRGB(255,255,255), 0.92)
+	local main = newInst("Frame", {
+		Name = "Main",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(WINDOW_SIZE.X, WINDOW_SIZE.Y),
+		BackgroundColor3 = THEME.Background,
+		BorderSizePixel = 0,
+		ClipsDescendants = true,
+	}, gui)
+	corner(main, 12)
+	stroke(main, Color3.fromRGB(255,255,255), 0.9)
 	win._main = main
 
-	-- Phantom V watermark (large, in bottom-right, very faint)
-	local phantom = Instance.new("TextLabel")
-	phantom.Name = "Phantom"
-	phantom.Size = UDim2.fromOffset(320, 320)
-	phantom.AnchorPoint = Vector2.new(1, 1)
-	phantom.Position = UDim2.new(1, 20, 1, 30)
-	phantom.BackgroundTransparency = 1
-	phantom.Text = (win._config.Theme and type(win._config.Theme) == "table" and win._config.Theme.PhantomLogo) or "V"
-	phantom.Font = Enum.Font.GothamBold
-	phantom.TextSize = 300
-	phantom.TextColor3 = Color3.fromRGB(255, 255, 255)
-	phantom.TextTransparency = 0.96
-	phantom.TextXAlignment = Enum.TextXAlignment.Right
-	phantom.TextYAlignment = Enum.TextYAlignment.Bottom
-	phantom.ZIndex = 0
-	phantom.Parent = main
+	-- Phantom V watermark
+	newInst("TextLabel", {
+		Size = UDim2.fromOffset(280, 280),
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, 30, 1, 30),
+		BackgroundTransparency = 1,
+		Text = "V",
+		Font = Enum.Font.GothamBold,
+		TextSize = 280,
+		TextColor3 = Color3.fromRGB(255,255,255),
+		TextTransparency = 0.96,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		TextYAlignment = Enum.TextYAlignment.Bottom,
+		ZIndex = 0,
+	}, main)
 
-	-- Topbar
-	local topbar = Instance.new("Frame")
-	topbar.Name = "Topbar"
-	topbar.Size = UDim2.new(1, 0, 0, 44)
-	topbar.BackgroundColor3 = theme.Topbar
-	topbar.BorderSizePixel = 0
-	topbar.Parent = main
+	-- TOPBAR
+	local topbar = newInst("Frame", {
+		Name = "Topbar",
+		Size = UDim2.new(1, 0, 0, TOPBAR_HEIGHT),
+		BackgroundColor3 = THEME.Topbar,
+		BorderSizePixel = 0,
+	}, main)
 	win._topbar = topbar
 
-	-- Topbar divider
-	local tbDiv = Instance.new("Frame")
-	tbDiv.Size = UDim2.new(1, 0, 0, 1)
-	tbDiv.Position = UDim2.new(0, 0, 1, -1)
-	tbDiv.BackgroundColor3 = Color3.fromRGB(255,255,255)
-	tbDiv.BackgroundTransparency = 0.94
-	tbDiv.BorderSizePixel = 0
-	tbDiv.Parent = topbar
+	-- Divider
+	newInst("Frame", {
+		Size = UDim2.new(1, 0, 0, 1),
+		Position = UDim2.new(0, 0, 1, -1),
+		BackgroundColor3 = Color3.fromRGB(255,255,255),
+		BackgroundTransparency = 0.93,
+		BorderSizePixel = 0,
+	}, topbar)
 
-	-- Logo box (gradient square with letter)
-	local logoBox = Instance.new("Frame")
-	logoBox.Size = UDim2.fromOffset(22, 22)
-	logoBox.Position = UDim2.fromOffset(14, 11)
-	logoBox.BackgroundColor3 = theme.Accent[1]
-	logoBox.BorderSizePixel = 0
-	logoBox.Parent = topbar
+	-- Logo box (solid purple, no gradient)
+	local logoBox = newInst("Frame", {
+		Size = UDim2.fromOffset(22, 22),
+		Position = UDim2.fromOffset(12, 10),
+		BackgroundColor3 = THEME.Accent,
+		BorderSizePixel = 0,
+	}, topbar)
 	corner(logoBox, 6)
-	gradient(logoBox, theme.Accent, 135)
+	newInst("TextLabel", {
+		Size = UDim2.fromScale(1,1),
+		BackgroundTransparency = 1,
+		Text = (win._name):sub(1,1):upper(),
+		Font = Enum.Font.GothamBold,
+		TextSize = 12,
+		TextColor3 = Color3.fromRGB(255,255,255),
+	}, logoBox)
 
-	local logoLetter = Instance.new("TextLabel")
-	logoLetter.Size = UDim2.fromScale(1, 1)
-	logoLetter.BackgroundTransparency = 1
-	logoLetter.Text = ((win._config.Theme and type(win._config.Theme) == "table" and win._config.Theme.PhantomLogo) or win._name):sub(1,1)
-	logoLetter.Font = Enum.Font.GothamBold
-	logoLetter.TextSize = 12
-	logoLetter.TextColor3 = Color3.fromRGB(255, 255, 255)
-	logoLetter.Parent = logoBox
+	-- Title (left-aligned, autosize)
+	local title = newInst("TextLabel", {
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.new(0, 0, 0, 22),
+		Position = UDim2.fromOffset(42, 10),
+		BackgroundTransparency = 1,
+		Text = win._name,
+		Font = Enum.Font.GothamMedium,
+		TextSize = 13,
+		TextColor3 = THEME.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, topbar)
 
-	-- Title (name)
-	local title = Instance.new("TextLabel")
-	title.Size = UDim2.fromOffset(180, 22)
-	title.Position = UDim2.fromOffset(44, 11)
-	title.BackgroundTransparency = 1
-	title.Text = win._name
-	title.Font = Enum.Font.GothamMedium
-	title.TextSize = 13
-	title.TextColor3 = theme.Text
-	title.TextXAlignment = Enum.TextXAlignment.Left
-	title.AutomaticSize = Enum.AutomaticSize.X
-	title.Parent = topbar
-
-	-- Version badge
-	local badge = Instance.new("Frame")
-	badge.Size = UDim2.fromOffset(38, 18)
-	badge.AnchorPoint = Vector2.new(0, 0.5)
-	badge.BackgroundColor3 = theme.ElementBg
-	badge.BorderSizePixel = 0
-	badge.Parent = topbar
+	-- Version badge — wait for title to size, then position
+	local badge = newInst("Frame", {
+		Size = UDim2.fromOffset(36, 16),
+		Position = UDim2.fromOffset(0, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundColor3 = THEME.ElementBg,
+		BorderSizePixel = 0,
+		Visible = false,
+	}, topbar)
 	corner(badge, 4)
-	stroke(badge, Color3.fromRGB(255,255,255), 0.94)
+	stroke(badge, THEME.Border, 0.6)
+	newInst("TextLabel", {
+		Size = UDim2.fromScale(1,1),
+		BackgroundTransparency = 1,
+		Text = win._version,
+		Font = Enum.Font.Gotham,
+		TextSize = 9,
+		TextColor3 = THEME.TextFaint,
+	}, badge)
 
-	local badgeText = Instance.new("TextLabel")
-	badgeText.Size = UDim2.fromScale(1, 1)
-	badgeText.BackgroundTransparency = 1
-	badgeText.Text = win._version
-	badgeText.Font = Enum.Font.Gotham
-	badgeText.TextSize = 10
-	badgeText.TextColor3 = theme.TextFaint
-	badgeText.Parent = badge
-
-	-- Position badge after title (using post-init since title auto-sizes)
 	task.defer(function()
-		badge.Position = UDim2.new(0, 44 + title.TextBounds.X + 10, 0.5, 0)
+		task.wait(0.05)
+		badge.Position = UDim2.new(0, 42 + title.TextBounds.X + 8, 0.5, 0)
+		badge.Visible = true
 	end)
 
-	-- Topbar icon buttons (right side)
-	local function topbarIcon(name, x, glyph)
-		local btn = Instance.new("TextButton")
-		btn.Name = name
-		btn.Size = UDim2.fromOffset(26, 26)
-		btn.AnchorPoint = Vector2.new(1, 0.5)
-		btn.Position = UDim2.new(1, x, 0.5, 0)
-		btn.BackgroundTransparency = 1
-		btn.Text = glyph
-		btn.Font = Enum.Font.GothamBold
-		btn.TextSize = 16
-		btn.TextColor3 = theme.TextDim
-		btn.AutoButtonColor = false
-		btn.Parent = topbar
-		btn.MouseEnter:Connect(function() tween(btn, 0.15, {TextColor3 = theme.Text}) end)
-		btn.MouseLeave:Connect(function() tween(btn, 0.15, {TextColor3 = theme.TextDim}) end)
-		return btn
+	-- Topbar buttons (right side, ASCII glyphs that ACTUALLY render)
+	local function topBtn(name, glyph, xOff, size)
+		local b = newInst("TextButton", {
+			Name = name,
+			Size = UDim2.fromOffset(24, 24),
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, xOff, 0.5, 0),
+			BackgroundTransparency = 1,
+			Text = glyph,
+			Font = Enum.Font.GothamBold,
+			TextSize = size or 14,
+			TextColor3 = THEME.TextDim,
+			AutoButtonColor = false,
+		}, topbar)
+		b.MouseEnter:Connect(function() tween(b, 0.15, {TextColor3 = THEME.Text}) end)
+		b.MouseLeave:Connect(function() tween(b, 0.15, {TextColor3 = THEME.TextDim}) end)
+		return b
 	end
 
-	local close = topbarIcon("Close", -14, "×")
-	local mini  = topbarIcon("Mini",  -44, "−")
-	local sett  = topbarIcon("Set",   -74, "⚙")
-	local srch  = topbarIcon("Srch",  -104, "⌕")
+	local closeBtn = topBtn("Close", "×", -12, 20)
+	local miniBtn  = topBtn("Mini",  "−", -40, 20)
 
-	close.TextSize = 22
-	mini.TextSize  = 22
+	closeBtn.MouseButton1Click:Connect(function() win:Destroy() end)
+	miniBtn.MouseButton1Click:Connect(function() win:Minimise() end)
 
-	close.MouseButton1Click:Connect(function() win:Destroy() end)
-	mini.MouseButton1Click:Connect(function() win:Minimise() end)
-
-	-- Tab bar
-	local tabBar = Instance.new("Frame")
-	tabBar.Name = "TabBar"
-	tabBar.Size = UDim2.new(1, 0, 0, 44)
-	tabBar.Position = UDim2.fromOffset(0, 44)
-	tabBar.BackgroundTransparency = 1
-	tabBar.Parent = main
+	-- TABBAR
+	local tabBar = newInst("Frame", {
+		Name = "TabBar",
+		Size = UDim2.new(1, 0, 0, TABBAR_HEIGHT),
+		Position = UDim2.fromOffset(0, TOPBAR_HEIGHT),
+		BackgroundTransparency = 1,
+	}, main)
 	win._tabBar = tabBar
 
-	-- Bottom divider
-	local tbBarDiv = Instance.new("Frame")
-	tbBarDiv.Size = UDim2.new(1, 0, 0, 1)
-	tbBarDiv.Position = UDim2.new(0, 0, 1, -1)
-	tbBarDiv.BackgroundColor3 = Color3.fromRGB(255,255,255)
-	tbBarDiv.BackgroundTransparency = 0.94
-	tbBarDiv.BorderSizePixel = 0
-	tbBarDiv.Parent = tabBar
+	-- Divider under tabbar
+	newInst("Frame", {
+		Size = UDim2.new(1, 0, 0, 1),
+		Position = UDim2.new(0, 0, 1, -1),
+		BackgroundColor3 = Color3.fromRGB(255,255,255),
+		BackgroundTransparency = 0.93,
+		BorderSizePixel = 0,
+	}, tabBar)
 
 	local tbLayout = listLayout(tabBar, 6, Enum.FillDirection.Horizontal)
 	tbLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	padding(tabBar, 0, 14, 0, 14)
+	padding(tabBar, 0, 12, 0, 12)
 
-	-- Content area
-	local content = Instance.new("Frame")
-	content.Name = "Content"
-	content.Size = UDim2.new(1, 0, 1, -88)
-	content.Position = UDim2.fromOffset(0, 88)
-	content.BackgroundTransparency = 1
-	content.Parent = main
+	-- CONTENT
+	local content = newInst("Frame", {
+		Name = "Content",
+		Size = UDim2.new(1, 0, 1, -(TOPBAR_HEIGHT + TABBAR_HEIGHT)),
+		Position = UDim2.fromOffset(0, TOPBAR_HEIGHT + TABBAR_HEIGHT),
+		BackgroundTransparency = 1,
+	}, main)
 	win._content = content
 
 	-- Drag
@@ -983,124 +842,86 @@ function VaenHub:_BuildWindow(win)
 end
 
 --==============================================================
--- TAB BUILDER (with gradient pill on active)
+-- TAB BUILDER
 --==============================================================
 function VaenHub:_BuildTab(win, t)
-	local theme = win._theme
+	-- Pill button (solid purple when active, transparent when not)
+	local btn = newInst("TextButton", {
+		Name = t._name,
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.new(0, 0, 0, 26),
+		BackgroundColor3 = THEME.ElementBg,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Text = "",
+		AutoButtonColor = false,
+	}, win._tabBar)
+	corner(btn, 6)
+	padding(btn, 0, 14, 0, 14)
 
-	-- Pill button
-	local btn = Instance.new("TextButton")
-	btn.Name = t._name
-	btn.AutomaticSize = Enum.AutomaticSize.X
-	btn.Size = UDim2.new(0, 0, 0, 30)
-	btn.BackgroundColor3 = theme.ElementBg
-	btn.BackgroundTransparency = 1
-	btn.BorderSizePixel = 0
-	btn.Text = ""
-	btn.AutoButtonColor = false
-	btn.Parent = win._tabBar
-	corner(btn, 7)
+	-- Inner layout (dot + label horizontally)
+	local innerLayout = newInst("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 8),
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, btn)
 
-	padding(btn, 0, 12, 0, 12)
-
-	-- Gradient overlay (hidden when inactive)
-	local pillGradient = Instance.new("UIGradient")
-	pillGradient.Color = ColorSequence.new{
-		ColorSequenceKeypoint.new(0, theme.Accent[1]),
-		ColorSequenceKeypoint.new(1, theme.Accent[2]),
-	}
-	pillGradient.Rotation = 135
-	pillGradient.Transparency = NumberSequence.new(1)
-	pillGradient.Parent = btn
-
-	-- Inner layout
-	local innerLayout = Instance.new("UIListLayout")
-	innerLayout.FillDirection = Enum.FillDirection.Horizontal
-	innerLayout.Padding = UDim.new(0, 6)
-	innerLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	innerLayout.Parent = btn
-
-	-- Stroke (visible only when active)
-	local btnStroke = Instance.new("UIStroke")
-	btnStroke.Color = theme.AccentGlow
-	btnStroke.Transparency = 1
-	btnStroke.Thickness = 1
-	btnStroke.Parent = btn
-
-	-- Icon
-	local iconImg
-	if t._icon then
-		local res = resolveIcon(t._icon)
-		if res then
-			iconImg = Instance.new("ImageLabel")
-			iconImg.Size = UDim2.fromOffset(14, 14)
-			iconImg.BackgroundTransparency = 1
-			iconImg.Image = res.id
-			iconImg.ImageRectOffset = res.rectOffset
-			iconImg.ImageRectSize = res.rectSize
-			iconImg.ImageColor3 = theme.TextDim
-			iconImg.LayoutOrder = 1
-			iconImg.Parent = btn
-		end
-	end
+	-- Active indicator dot (small circle, only visible when active)
+	local activeDot = newInst("Frame", {
+		Size = UDim2.fromOffset(6, 6),
+		BackgroundColor3 = Color3.fromRGB(255,255,255),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		LayoutOrder = 1,
+	}, btn)
+	corner(activeDot, 3)
 
 	-- Label
-	local lbl = Instance.new("TextLabel")
-	lbl.AutomaticSize = Enum.AutomaticSize.X
-	lbl.Size = UDim2.new(0, 0, 1, 0)
-	lbl.BackgroundTransparency = 1
-	lbl.Text = t._name
-	lbl.Font = Enum.Font.GothamMedium
-	lbl.TextSize = 12
-	lbl.TextColor3 = theme.TextDim
-	lbl.LayoutOrder = 2
-	lbl.Parent = btn
+	local lbl = newInst("TextLabel", {
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.new(0, 0, 1, 0),
+		BackgroundTransparency = 1,
+		Text = t._name,
+		Font = Enum.Font.GothamMedium,
+		TextSize = 12,
+		TextColor3 = THEME.TextDim,
+		LayoutOrder = 2,
+	}, btn)
 
 	t._button = btn
-	t._buttonIcon = iconImg
 	t._buttonLabel = lbl
-	t._buttonStroke = btnStroke
-	t._pillGradient = pillGradient
-
-	-- Setting bg via gradient (we use a frame trick: the button's own bg shows gradient)
-	-- Actually: when active we want it to look filled with gradient. We do this by
-	-- setting BackgroundTransparency = 0 and applying the gradient on top.
-	-- But UIGradient on a TextButton works on the BG fill.
+	t._activeDot = activeDot
 
 	-- Click
-	btn.MouseButton1Click:Connect(function()
-		win:_SelectTab(t)
-	end)
+	btn.MouseButton1Click:Connect(function() win:_SelectTab(t) end)
 
-	-- Hover (only on inactive)
+	-- Hover (only when not active)
 	btn.MouseEnter:Connect(function()
 		if win._currentTab ~= t then
-			tween(lbl, 0.2, {TextColor3 = theme.Text})
-			if iconImg then tween(iconImg, 0.2, {ImageColor3 = theme.Text}) end
+			tween(lbl, 0.15, {TextColor3 = THEME.Text})
 		end
 	end)
 	btn.MouseLeave:Connect(function()
 		if win._currentTab ~= t then
-			tween(lbl, 0.2, {TextColor3 = theme.TextDim})
-			if iconImg then tween(iconImg, 0.2, {ImageColor3 = theme.TextDim}) end
+			tween(lbl, 0.15, {TextColor3 = THEME.TextDim})
 		end
 	end)
 
 	-- Page
-	local page = Instance.new("ScrollingFrame")
-	page.Name = t._name
-	page.Size = UDim2.fromScale(1, 1)
-	page.BackgroundTransparency = 1
-	page.BorderSizePixel = 0
-	page.ScrollBarThickness = 2
-	page.ScrollBarImageColor3 = theme.TextDim
-	page.ScrollBarImageTransparency = 0.7
-	page.CanvasSize = UDim2.new()
-	page.AutomaticCanvasSize = Enum.AutomaticSize.Y
-	page.Visible = false
-	page.Parent = win._content
-
-	listLayout(page, 8)
+	local page = newInst("ScrollingFrame", {
+		Name = t._name,
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 2,
+		ScrollBarImageColor3 = THEME.TextDim,
+		ScrollBarImageTransparency = 0.7,
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		Visible = false,
+	}, win._content)
+	listLayout(page, ELEMENT_SPACING)
 	padding(page, 10, 14, 12, 14)
 
 	t._page = page
@@ -1113,145 +934,118 @@ function VaenHub:_NewElement(tab, kind, name)
 	local e = setmetatable({
 		_type = kind, _name = name, _tab = tab, _window = tab._window,
 		_built = false, _enabled = true,
+		-- Capture layout order at creation time so Section appears above its elements
+		_layoutOrder = #tab._page:GetChildren(),
 	}, {__index = Elem})
 
-	-- Auto-build elements that don't need a callback
+	-- Elements that don't need a callback — auto-build
 	if kind == "Label" or kind == "Status" or kind == "Section"
 		or kind == "Divider" or kind == "Paragraph" then
-		task.defer(function() if not e._built then self:_MaterializeElement(e) end end)
+		task.defer(function() if not e._built then self:_Build(e) end end)
 	end
 	return e
 end
 
-function VaenHub:_MaterializeElement(e)
+function VaenHub:_Build(e)
 	if e._built then return end
 	e._built = true
-	local b = self._ElementBuilders[e._type]
+	local b = self._Builders[e._type]
 	if b then
 		b(self, e)
+		if e._frame then e._frame.LayoutOrder = e._layoutOrder end
 		table.insert(e._window._elements, e)
 	end
 end
 
-VaenHub._ElementBuilders = {}
+VaenHub._Builders = {}
 
 --==============================================================
--- 11. ELEMENT BUILDERS — each one mockup-accurate
+-- 8. ELEMENT BUILDERS
 --==============================================================
 
--- Base row helper (consistent padding, icon, label)
-local function elementRow(elem, height)
-	local theme = elem._window._theme
-	local frame = Instance.new("Frame")
-	frame.Size = UDim2.new(1, 0, 0, height or 40)
-	frame.BackgroundColor3 = theme.ElementBg
-	frame.BorderSizePixel = 0
-	frame.Parent = elem._tab._page
-	corner(frame, 8)
-	local s = stroke(frame, Color3.fromRGB(255,255,255), 0.94)
-
-	-- Subtle hover effect
-	frame.MouseEnter:Connect(function()
-		tween(frame, 0.2, {BackgroundColor3 = theme.ElementHover})
-	end)
-	frame.MouseLeave:Connect(function()
-		tween(frame, 0.2, {BackgroundColor3 = theme.ElementBg})
-	end)
-
-	return frame, s
+-- Reusable row container
+local function row(elem, height)
+	return newInst("Frame", {
+		Size = UDim2.new(1, 0, 0, height or ELEMENT_HEIGHT),
+		BackgroundColor3 = THEME.ElementBg,
+		BorderSizePixel = 0,
+	}, elem._tab._page)
 end
 
-local function addRowIcon(frame, iconName, theme, color)
-	local res = resolveIcon(iconName)
-	if not res then return nil, 12 end -- x offset if no icon
-	local img = Instance.new("ImageLabel")
-	img.Size = UDim2.fromOffset(14, 14)
-	img.Position = UDim2.fromOffset(14, 0)
-	img.AnchorPoint = Vector2.new(0, 0.5)
-	img.Position = UDim2.new(0, 14, 0.5, 0)
-	img.BackgroundTransparency = 1
-	img.Image = res.id
-	img.ImageRectOffset = res.rectOffset
-	img.ImageRectSize = res.rectSize
-	img.ImageColor3 = color or theme.TextDim
-	img.Parent = frame
-	return img, 36 -- x offset for label
+local function setupRow(frame)
+	corner(frame, CORNER_RADIUS)
+	stroke(frame, THEME.Border, 0.7)
+	frame.MouseEnter:Connect(function() tween(frame, 0.15, {BackgroundColor3 = THEME.ElementHover}) end)
+	frame.MouseLeave:Connect(function() tween(frame, 0.15, {BackgroundColor3 = THEME.ElementBg}) end)
 end
 
--- TOGGLE
-VaenHub._ElementBuilders.Toggle = function(self, elem)
-	local theme = elem._window._theme
-	local frame = elementRow(elem, 40)
+-- TOGGLE (purple solid track when on, white thumb, glow ring)
+VaenHub._Builders.Toggle = function(self, elem)
+	local frame = row(elem)
+	setupRow(frame)
 
-	-- Icon (optional)
-	local iconImg, labelX = addRowIcon(frame, elem._icon, theme)
+	local lbl = newInst("TextLabel", {
+		Size = UDim2.new(1, -64, 1, 0),
+		Position = UDim2.fromOffset(14, 0),
+		BackgroundTransparency = 1,
+		Text = elem._name,
+		Font = Enum.Font.Gotham,
+		TextSize = 13,
+		TextColor3 = THEME.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, frame)
 
-	-- Label
-	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.new(1, -labelX - 60, 1, 0)
-	lbl.Position = UDim2.fromOffset(labelX, 0)
-	lbl.BackgroundTransparency = 1
-	lbl.Text = elem._name
-	lbl.Font = Enum.Font.Gotham
-	lbl.TextSize = 13
-	lbl.TextColor3 = theme.Text
-	lbl.TextXAlignment = Enum.TextXAlignment.Left
-	lbl.Parent = frame
-
-	-- Switch track
-	local track = Instance.new("Frame")
-	track.Size = UDim2.fromOffset(36, 18)
-	track.AnchorPoint = Vector2.new(1, 0.5)
-	track.Position = UDim2.new(1, -14, 0.5, 0)
-	track.BackgroundColor3 = theme.ElementHover
-	track.BorderSizePixel = 0
-	track.Parent = frame
+	-- Track
+	local track = newInst("Frame", {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Size = UDim2.fromOffset(34, 18),
+		Position = UDim2.new(1, -14, 0.5, 0),
+		BackgroundColor3 = THEME.ElementHover,
+		BorderSizePixel = 0,
+	}, frame)
 	corner(track, 9)
 
-	-- Gradient fill (enabled when on)
-	local fillGradient = gradient(track, theme.Accent, 135)
-	fillGradient.Enabled = false
+	-- Thumb (anchor-based for smooth slide)
+	local thumb = newInst("Frame", {
+		Size = UDim2.fromOffset(12, 12),
+		Position = UDim2.new(0, 3, 0.5, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundColor3 = Color3.fromRGB(255,255,255),
+		BorderSizePixel = 0,
+	}, track)
+	corner(thumb, 6)
 
-	-- Thumb
-	local thumb = Instance.new("Frame")
-	thumb.Size = UDim2.fromOffset(14, 14)
-	thumb.Position = UDim2.new(0, 2, 0.5, 0)
-	thumb.AnchorPoint = Vector2.new(0, 0.5)
-	thumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	thumb.BorderSizePixel = 0
-	thumb.Parent = track
-	corner(thumb, 7)
+	-- Glow (UIStroke acts as halo)
+	local glow = newInst("UIStroke", {
+		Color = THEME.Accent,
+		Transparency = 1,
+		Thickness = 2,
+	}, thumb)
 
-	-- Glow when on
-	local glow = Instance.new("UIStroke")
-	glow.Color = theme.AccentGlow
-	glow.Transparency = 1
-	glow.Thickness = 1
-	glow.Parent = thumb
-
-	local clickBtn = Instance.new("TextButton")
-	clickBtn.Size = UDim2.fromScale(1, 1)
-	clickBtn.BackgroundTransparency = 1
-	clickBtn.Text = ""
-	clickBtn.AutoButtonColor = false
-	clickBtn.Parent = frame
+	local btn = newInst("TextButton", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Text = "",
+		AutoButtonColor = false,
+	}, frame)
 
 	local function update(v, animate)
 		elem._current = v
-		local pos = v and UDim2.new(1, -16, 0.5, 0) or UDim2.new(0, 2, 0.5, 0)
+		local pos = v and UDim2.new(1, -3, 0.5, 0) or UDim2.new(0, 3, 0.5, 0)
 		local anchor = v and Vector2.new(1, 0.5) or Vector2.new(0, 0.5)
 		if animate == false then
 			thumb.Position = pos
 			thumb.AnchorPoint = anchor
+			track.BackgroundColor3 = v and THEME.Accent or THEME.ElementHover
+			glow.Transparency = v and 0.5 or 1
 		else
-			tween(thumb, 0.25, {Position = pos, AnchorPoint = anchor})
+			tween(thumb, 0.22, {Position = pos, AnchorPoint = anchor})
+			tween(track, 0.22, {BackgroundColor3 = v and THEME.Accent or THEME.ElementHover})
+			tween(glow, 0.22, {Transparency = v and 0.5 or 1})
 		end
-		fillGradient.Enabled = v
-		track.BackgroundColor3 = v and theme.Accent[1] or theme.ElementHover
-		glow.Transparency = v and 0.4 or 1
 	end
 
-	clickBtn.MouseButton1Click:Connect(function()
+	btn.MouseButton1Click:Connect(function()
 		if not elem._enabled then return end
 		update(not elem._current)
 		if elem._callback then task.spawn(pcall, elem._callback, elem._current) end
@@ -1259,84 +1053,73 @@ VaenHub._ElementBuilders.Toggle = function(self, elem)
 	end)
 
 	elem._frame = frame
-	elem._update = update
+	elem._update = function(v) update(v) end
 	update(elem._default == true, false)
 end
 
--- SLIDER
-VaenHub._ElementBuilders.Slider = function(self, elem)
-	local theme = elem._window._theme
+-- SLIDER (purple fill, white thumb with glow halo)
+VaenHub._Builders.Slider = function(self, elem)
 	elem._min = elem._min or 0
 	elem._max = elem._max or 100
 	elem._step = elem._step or 1
 	elem._current = elem._default or elem._min
 
-	local frame = elementRow(elem, 40)
+	local frame = row(elem)
+	setupRow(frame)
 
-	local iconImg, labelX = addRowIcon(frame, elem._icon, theme)
+	local lbl = newInst("TextLabel", {
+		Size = UDim2.fromOffset(90, ELEMENT_HEIGHT),
+		Position = UDim2.fromOffset(14, 0),
+		BackgroundTransparency = 1,
+		Text = elem._name,
+		Font = Enum.Font.Gotham,
+		TextSize = 13,
+		TextColor3 = THEME.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, frame)
 
-	-- Label
-	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.fromOffset(80, 40)
-	lbl.Position = UDim2.fromOffset(labelX, 0)
-	lbl.BackgroundTransparency = 1
-	lbl.Text = elem._name
-	lbl.Font = Enum.Font.Gotham
-	lbl.TextSize = 13
-	lbl.TextColor3 = theme.Text
-	lbl.TextXAlignment = Enum.TextXAlignment.Left
-	lbl.Parent = frame
-
-	-- Value text
-	local valText = Instance.new("TextLabel")
-	valText.AnchorPoint = Vector2.new(1, 0.5)
-	valText.Size = UDim2.fromOffset(60, 40)
-	valText.Position = UDim2.new(1, -14, 0.5, 0)
-	valText.BackgroundTransparency = 1
-	valText.Text = tostring(elem._current) .. (elem._suffix and (" " .. elem._suffix) or "")
-	valText.Font = Enum.Font.GothamMedium
-	valText.TextSize = 12
-	valText.TextColor3 = theme.TextDim
-	valText.TextXAlignment = Enum.TextXAlignment.Right
-	valText.Parent = frame
+	local valText = newInst("TextLabel", {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Size = UDim2.fromOffset(70, ELEMENT_HEIGHT),
+		Position = UDim2.new(1, -14, 0.5, 0),
+		BackgroundTransparency = 1,
+		Text = tostring(elem._current)..(elem._suffix and (" "..elem._suffix) or ""),
+		Font = Enum.Font.GothamMedium,
+		TextSize = 12,
+		TextColor3 = THEME.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Right,
+	}, frame)
 
 	-- Track
-	local track = Instance.new("Frame")
-	track.AnchorPoint = Vector2.new(0, 0.5)
-	track.Size = UDim2.new(1, -(labelX + 80 + 80), 0, 4)
-	track.Position = UDim2.new(0, labelX + 80, 0.5, 0)
-	track.BackgroundColor3 = theme.ElementHover
-	track.BorderSizePixel = 0
-	track.Parent = frame
+	local track = newInst("Frame", {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Size = UDim2.new(1, -(104 + 84), 0, 4),
+		Position = UDim2.new(0, 104, 0.5, 0),
+		BackgroundColor3 = THEME.ElementHover,
+		BorderSizePixel = 0,
+	}, frame)
 	corner(track, 2)
 
 	-- Fill
-	local fill = Instance.new("Frame")
-	fill.Size = UDim2.fromScale(0, 1)
-	fill.BackgroundColor3 = theme.Accent[1]
-	fill.BorderSizePixel = 0
-	fill.Parent = track
+	local fill = newInst("Frame", {
+		Size = UDim2.fromScale(0, 1),
+		BackgroundColor3 = THEME.Accent,
+		BorderSizePixel = 0,
+	}, track)
 	corner(fill, 2)
-	gradient(fill, theme.Accent, 0)
 
 	-- Thumb with glow
-	local thumb = Instance.new("Frame")
-	thumb.AnchorPoint = Vector2.new(0.5, 0.5)
-	thumb.Size = UDim2.fromOffset(11, 11)
-	thumb.Position = UDim2.fromScale(0, 0.5)
-	thumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	thumb.BorderSizePixel = 0
-	thumb.Parent = fill
+	local thumb = newInst("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.fromOffset(12, 12),
+		Position = UDim2.new(1, 0, 0.5, 0),
+		BackgroundColor3 = Color3.fromRGB(255,255,255),
+		BorderSizePixel = 0,
+		ZIndex = 2,
+	}, fill)
 	corner(thumb, 6)
+	newInst("UIStroke", {Color = THEME.Accent, Transparency = 0.4, Thickness = 2}, thumb)
 
-	-- Thumb glow ring
-	local thumbGlow = Instance.new("UIStroke")
-	thumbGlow.Color = theme.AccentGlow
-	thumbGlow.Transparency = 0.3
-	thumbGlow.Thickness = 2
-	thumbGlow.Parent = thumb
-
-	-- Drag
 	local dragging = false
 	local function setFromX(x)
 		local rel = math.clamp((x - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
@@ -1344,10 +1127,9 @@ VaenHub._ElementBuilders.Slider = function(self, elem)
 		local snapped = math.floor(raw / elem._step + 0.5) * elem._step
 		snapped = math.clamp(snapped, elem._min, elem._max)
 		elem._current = snapped
-		local percent = (snapped - elem._min) / (elem._max - elem._min)
-		fill.Size = UDim2.fromScale(percent, 1)
-		thumb.Position = UDim2.new(1, 0, 0.5, 0)
-		valText.Text = tostring(snapped) .. (elem._suffix and (" " .. elem._suffix) or "")
+		local p = (snapped - elem._min) / (elem._max - elem._min)
+		fill.Size = UDim2.fromScale(p, 1)
+		valText.Text = tostring(snapped)..(elem._suffix and (" "..elem._suffix) or "")
 		if elem._callback then task.spawn(pcall, elem._callback, snapped) end
 	end
 
@@ -1356,8 +1138,6 @@ VaenHub._ElementBuilders.Slider = function(self, elem)
 			dragging = true; setFromX(i.Position.X)
 		end
 	end)
-	-- Allow clicking on thumb/fill too
-	thumb.InputBegan = nil -- (just in case)
 	fill.InputBegan:Connect(function(i)
 		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
 			dragging = true; setFromX(i.Position.X)
@@ -1371,16 +1151,13 @@ VaenHub._ElementBuilders.Slider = function(self, elem)
 	end)
 	local c2 = UserInputService.InputEnded:Connect(function(i)
 		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-			if dragging and elem._flag and elem._window._configSave.Enabled then
-				elem._window:SaveConfig()
-			end
+			if dragging and elem._flag and elem._window._configSave.Enabled then elem._window:SaveConfig() end
 			dragging = false
 		end
 	end)
 	table.insert(elem._window._connections, c1)
 	table.insert(elem._window._connections, c2)
 
-	-- Init
 	local p0 = (elem._current - elem._min) / (elem._max - elem._min)
 	fill.Size = UDim2.fromScale(p0, 1)
 
@@ -1389,266 +1166,243 @@ VaenHub._ElementBuilders.Slider = function(self, elem)
 		elem._current = v
 		local p = (v - elem._min) / (elem._max - elem._min)
 		fill.Size = UDim2.fromScale(p, 1)
-		valText.Text = tostring(v) .. (elem._suffix and (" " .. elem._suffix) or "")
+		valText.Text = tostring(v)..(elem._suffix and (" "..elem._suffix) or "")
 	end
 end
 
 -- BUTTON
-VaenHub._ElementBuilders.Button = function(self, elem)
-	local theme = elem._window._theme
-	local frame, s = elementRow(elem, 40)
+VaenHub._Builders.Button = function(self, elem)
+	local frame = row(elem)
+	setupRow(frame)
 
-	local iconImg, labelX = addRowIcon(frame, elem._icon, theme)
+	local lbl = newInst("TextLabel", {
+		Size = UDim2.new(1, -38, 1, 0),
+		Position = UDim2.fromOffset(14, 0),
+		BackgroundTransparency = 1,
+		Text = elem._name,
+		Font = Enum.Font.GothamMedium,
+		TextSize = 13,
+		TextColor3 = THEME.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, frame)
 
-	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.new(1, -labelX - 24, 1, 0)
-	lbl.Position = UDim2.fromOffset(labelX, 0)
-	lbl.BackgroundTransparency = 1
-	lbl.Text = elem._name
-	lbl.Font = Enum.Font.GothamMedium
-	lbl.TextSize = 13
-	lbl.TextColor3 = theme.Text
-	lbl.TextXAlignment = Enum.TextXAlignment.Left
-	lbl.Parent = frame
+	local arrow = newInst("TextLabel", {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Size = UDim2.fromOffset(16, 16),
+		Position = UDim2.new(1, -14, 0.5, 0),
+		BackgroundTransparency = 1,
+		Text = "›",
+		Font = Enum.Font.GothamBold,
+		TextSize = 16,
+		TextColor3 = THEME.TextDim,
+	}, frame)
 
-	-- Right chevron
-	local arrow = Instance.new("TextLabel")
-	arrow.AnchorPoint = Vector2.new(1, 0.5)
-	arrow.Size = UDim2.fromOffset(16, 16)
-	arrow.Position = UDim2.new(1, -14, 0.5, 0)
-	arrow.BackgroundTransparency = 1
-	arrow.Text = "›"
-	arrow.Font = Enum.Font.GothamBold
-	arrow.TextSize = 16
-	arrow.TextColor3 = theme.TextDim
-	arrow.Parent = frame
-
-	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.fromScale(1, 1)
-	btn.BackgroundTransparency = 1
-	btn.Text = ""
-	btn.AutoButtonColor = false
-	btn.Parent = frame
+	local btn = newInst("TextButton", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Text = "",
+		AutoButtonColor = false,
+	}, frame)
 
 	btn.MouseButton1Click:Connect(function()
 		if not elem._enabled then return end
 		if elem._callback then task.spawn(pcall, elem._callback) end
-		-- Click feedback
-		tween(s, 0.1, {Color = theme.Accent[1], Transparency = 0.5})
-		task.wait(0.15)
-		tween(s, 0.3, {Color = Color3.fromRGB(255,255,255), Transparency = 0.94})
+		-- Flash
+		tween(frame, 0.1, {BackgroundColor3 = THEME.Accent})
+		task.wait(0.12)
+		tween(frame, 0.2, {BackgroundColor3 = THEME.ElementBg})
 	end)
 
 	elem._frame = frame
 end
 
--- STATUS (with pulse dot, optional right-side metric)
-VaenHub._ElementBuilders.Status = function(self, elem)
-	local theme = elem._window._theme
+-- STATUS (glowing green dot, name + value, optional metric)
+VaenHub._Builders.Status = function(self, elem)
+	local frame = newInst("Frame", {
+		Size = UDim2.new(1, 0, 0, 36),
+		BackgroundColor3 = THEME.ElementBg,
+		BorderSizePixel = 0,
+	}, elem._tab._page)
+	corner(frame, CORNER_RADIUS)
+	stroke(frame, THEME.Success, 0.75)
 
-	local frame = Instance.new("Frame")
-	frame.Size = UDim2.new(1, 0, 0, 36)
-	frame.BackgroundColor3 = theme.ElementBg
-	frame.BorderSizePixel = 0
-	frame.Parent = elem._tab._page
-	corner(frame, 8)
-	stroke(frame, theme.Success, 0.8)
-
-	-- Subtle green tint via gradient
-	gradient(frame, {
-		Color3.fromRGB(20, 35, 25),
-		Color3.fromRGB(18, 18, 26),
-	}, 90)
-
-	-- Pulse dot
-	local dot = Instance.new("Frame")
-	dot.AnchorPoint = Vector2.new(0, 0.5)
-	dot.Size = UDim2.fromOffset(7, 7)
-	dot.Position = UDim2.new(0, 14, 0.5, 0)
-	dot.BackgroundColor3 = theme.Success
-	dot.BorderSizePixel = 0
-	dot.Parent = frame
+	-- Pulsing dot
+	local dot = newInst("Frame", {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Size = UDim2.fromOffset(7, 7),
+		Position = UDim2.new(0, 14, 0.5, 0),
+		BackgroundColor3 = THEME.Success,
+		BorderSizePixel = 0,
+	}, frame)
 	corner(dot, 4)
+	local dotGlow = newInst("UIStroke", {Color = THEME.Success, Transparency = 0.3, Thickness = 2}, dot)
 
-	-- Glow
-	local dotGlow = Instance.new("UIStroke")
-	dotGlow.Color = theme.Success
-	dotGlow.Transparency = 0.4
-	dotGlow.Thickness = 2
-	dotGlow.Parent = dot
-
-	-- Pulse animation
+	-- Pulse loop
 	task.spawn(function()
 		while frame.Parent do
-			tween(dotGlow, 0.9, {Transparency = 0.9, Thickness = 5}, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
-			task.wait(0.9)
-			tween(dotGlow, 0.9, {Transparency = 0.4, Thickness = 2}, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
-			task.wait(0.9)
+			tween(dotGlow, 1.0, {Transparency = 0.85, Thickness = 5}, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+			task.wait(1.0)
+			if not frame.Parent then break end
+			tween(dotGlow, 1.0, {Transparency = 0.3, Thickness = 2}, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+			task.wait(1.0)
 		end
 	end)
 
-	-- Name label ("Status")
-	local nameLbl = Instance.new("TextLabel")
-	nameLbl.Size = UDim2.fromOffset(60, 36)
-	nameLbl.Position = UDim2.fromOffset(30, 0)
-	nameLbl.BackgroundTransparency = 1
-	nameLbl.Text = elem._name
-	nameLbl.Font = Enum.Font.Gotham
-	nameLbl.TextSize = 12
-	nameLbl.TextColor3 = theme.TextDim
-	nameLbl.TextXAlignment = Enum.TextXAlignment.Left
-	nameLbl.Parent = frame
+	-- Name
+	local nameLbl = newInst("TextLabel", {
+		Size = UDim2.fromOffset(56, 36),
+		Position = UDim2.fromOffset(30, 0),
+		BackgroundTransparency = 1,
+		Text = elem._name,
+		Font = Enum.Font.Gotham,
+		TextSize = 12,
+		TextColor3 = THEME.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, frame)
 
 	-- Value
-	local valLbl = Instance.new("TextLabel")
-	valLbl.Size = UDim2.new(1, -200, 1, 0)
-	valLbl.Position = UDim2.fromOffset(96, 0)
-	valLbl.BackgroundTransparency = 1
-	valLbl.Text = elem._content or "—"
-	valLbl.Font = Enum.Font.GothamMedium
-	valLbl.TextSize = 12
-	valLbl.TextColor3 = theme.Text
-	valLbl.TextXAlignment = Enum.TextXAlignment.Left
-	valLbl.Parent = frame
+	local valLbl = newInst("TextLabel", {
+		Size = UDim2.new(1, -200, 1, 0),
+		Position = UDim2.fromOffset(90, 0),
+		BackgroundTransparency = 1,
+		Text = elem._content or "—",
+		Font = Enum.Font.GothamMedium,
+		TextSize = 12,
+		TextColor3 = THEME.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, frame)
 
-	-- Right metric (set via :Metric)
-	local metric = Instance.new("TextLabel")
-	metric.AnchorPoint = Vector2.new(1, 0.5)
-	metric.Size = UDim2.fromOffset(100, 36)
-	metric.Position = UDim2.new(1, -14, 0.5, 0)
-	metric.BackgroundTransparency = 1
-	metric.Text = ""
-	metric.Font = Enum.Font.GothamMedium
-	metric.TextSize = 12
-	metric.TextColor3 = theme.Success
-	metric.TextXAlignment = Enum.TextXAlignment.Right
-	metric.Parent = frame
+	-- Metric (right side)
+	local metric = newInst("TextLabel", {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Size = UDim2.fromOffset(100, 36),
+		Position = UDim2.new(1, -14, 0.5, 0),
+		BackgroundTransparency = 1,
+		Text = "",
+		Font = Enum.Font.GothamMedium,
+		TextSize = 12,
+		TextColor3 = THEME.Success,
+		TextXAlignment = Enum.TextXAlignment.Right,
+	}, frame)
 
 	elem._frame = frame
 	elem._setContent = function(c) valLbl.Text = tostring(c) end
-	-- Override :Set
-	elem.Set = function(self, value, metricText)
-		self._current = value
-		valLbl.Text = tostring(value)
-		if metricText ~= nil then metric.Text = tostring(metricText) end
-		return self
+
+	elem.Set = function(s, val, met)
+		s._current = val
+		valLbl.Text = tostring(val)
+		if met ~= nil then metric.Text = tostring(met) end
+		return s
 	end
-	-- :Metric for right side
-	elem.Metric = function(self, m)
-		metric.Text = tostring(m)
-		return self
-	end
+	elem.Metric = function(s, m) metric.Text = tostring(m); return s end
 end
 
--- DROPDOWN (with expand animation)
-VaenHub._ElementBuilders.Dropdown = function(self, elem)
-	local theme = elem._window._theme
+-- DROPDOWN
+VaenHub._Builders.Dropdown = function(self, elem)
 	elem._options = elem._options or {}
 	if type(elem._current) ~= "table" then
 		elem._current = elem._default or {}
 		if type(elem._current) == "string" then elem._current = {elem._current} end
 	end
 
-	local frame = Instance.new("Frame")
-	frame.Size = UDim2.new(1, 0, 0, 40)
-	frame.BackgroundColor3 = theme.ElementBg
-	frame.BorderSizePixel = 0
-	frame.ClipsDescendants = true
-	frame.Parent = elem._tab._page
-	corner(frame, 8)
-	stroke(frame, Color3.fromRGB(255,255,255), 0.94)
+	local frame = newInst("Frame", {
+		Size = UDim2.new(1, 0, 0, ELEMENT_HEIGHT),
+		BackgroundColor3 = THEME.ElementBg,
+		BorderSizePixel = 0,
+		ClipsDescendants = true,
+	}, elem._tab._page)
+	corner(frame, CORNER_RADIUS)
+	stroke(frame, THEME.Border, 0.7)
 
-	local headerHeight = 40
+	local headerH = ELEMENT_HEIGHT
 
-	local iconImg, labelX = addRowIcon(frame, elem._icon, theme)
+	local lbl = newInst("TextLabel", {
+		Size = UDim2.fromOffset(120, headerH),
+		Position = UDim2.fromOffset(14, 0),
+		BackgroundTransparency = 1,
+		Text = elem._name,
+		Font = Enum.Font.Gotham,
+		TextSize = 13,
+		TextColor3 = THEME.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, frame)
 
-	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.fromOffset(120, headerHeight)
-	lbl.Position = UDim2.fromOffset(labelX, 0)
-	lbl.BackgroundTransparency = 1
-	lbl.Text = elem._name
-	lbl.Font = Enum.Font.Gotham
-	lbl.TextSize = 13
-	lbl.TextColor3 = theme.Text
-	lbl.TextXAlignment = Enum.TextXAlignment.Left
-	lbl.Parent = frame
-
-	-- Selected pill (right side)
-	local pill = Instance.new("Frame")
-	pill.AnchorPoint = Vector2.new(1, 0.5)
-	pill.Size = UDim2.fromOffset(110, 22)
-	pill.Position = UDim2.new(1, -14, 0, headerHeight/2)
-	pill.BackgroundColor3 = theme.ElementHover
-	pill.BorderSizePixel = 0
-	pill.Parent = frame
+	-- Selected pill
+	local pill = newInst("Frame", {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Size = UDim2.fromOffset(110, 22),
+		Position = UDim2.new(1, -14, 0, headerH/2),
+		BackgroundColor3 = THEME.ElementHover,
+		BorderSizePixel = 0,
+	}, frame)
 	corner(pill, 5)
 
-	local pillText = Instance.new("TextLabel")
-	pillText.Size = UDim2.new(1, -24, 1, 0)
-	pillText.Position = UDim2.fromOffset(8, 0)
-	pillText.BackgroundTransparency = 1
-	pillText.Text = #elem._current > 0 and (#elem._current == 1 and elem._current[1] or (#elem._current .. " selected")) or "None"
-	pillText.Font = Enum.Font.Gotham
-	pillText.TextSize = 11
-	pillText.TextColor3 = theme.Text
-	pillText.TextXAlignment = Enum.TextXAlignment.Left
-	pillText.TextTruncate = Enum.TextTruncate.AtEnd
-	pillText.Parent = pill
+	local pillText = newInst("TextLabel", {
+		Size = UDim2.new(1, -22, 1, 0),
+		Position = UDim2.fromOffset(8, 0),
+		BackgroundTransparency = 1,
+		Text = #elem._current > 0 and (#elem._current == 1 and elem._current[1] or (#elem._current.." selected")) or "None",
+		Font = Enum.Font.Gotham,
+		TextSize = 11,
+		TextColor3 = THEME.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	}, pill)
 
-	local pillArrow = Instance.new("TextLabel")
-	pillArrow.AnchorPoint = Vector2.new(1, 0.5)
-	pillArrow.Size = UDim2.fromOffset(14, 14)
-	pillArrow.Position = UDim2.new(1, -6, 0.5, 0)
-	pillArrow.BackgroundTransparency = 1
-	pillArrow.Text = "▾"
-	pillArrow.Font = Enum.Font.GothamBold
-	pillArrow.TextSize = 10
-	pillArrow.TextColor3 = theme.TextDim
-	pillArrow.Parent = pill
+	local pillArrow = newInst("TextLabel", {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Size = UDim2.fromOffset(14, 14),
+		Position = UDim2.new(1, -4, 0.5, 0),
+		BackgroundTransparency = 1,
+		Text = "v",
+		Font = Enum.Font.GothamBold,
+		TextSize = 10,
+		TextColor3 = THEME.TextDim,
+	}, pill)
 
-	-- Options container
-	local optsFrame = Instance.new("Frame")
-	optsFrame.Size = UDim2.new(1, -28, 0, 0)
-	optsFrame.Position = UDim2.fromOffset(14, headerHeight + 4)
-	optsFrame.BackgroundTransparency = 1
-	optsFrame.Parent = frame
-	local optsLayout = listLayout(optsFrame, 4)
+	-- Options list
+	local optsFrame = newInst("Frame", {
+		Size = UDim2.new(1, -28, 0, 0),
+		Position = UDim2.fromOffset(14, headerH + 4),
+		BackgroundTransparency = 1,
+	}, frame)
+	listLayout(optsFrame, 4)
 
 	local function refreshOptions()
 		for _, c in ipairs(optsFrame:GetChildren()) do
 			if c:IsA("TextButton") then c:Destroy() end
 		end
 		for _, opt in ipairs(elem._options) do
-			local optBtn = Instance.new("TextButton")
-			optBtn.Size = UDim2.new(1, 0, 0, 26)
-			optBtn.BackgroundColor3 = theme.ElementHover
-			optBtn.BorderSizePixel = 0
-			optBtn.Text = ""
-			optBtn.AutoButtonColor = false
-			optBtn.Parent = optsFrame
+			local optBtn = newInst("TextButton", {
+				Size = UDim2.new(1, 0, 0, 26),
+				BackgroundColor3 = THEME.ElementHover,
+				BorderSizePixel = 0,
+				Text = "",
+				AutoButtonColor = false,
+			}, optsFrame)
 			corner(optBtn, 6)
 
-			local optLbl = Instance.new("TextLabel")
-			optLbl.Size = UDim2.new(1, -16, 1, 0)
-			optLbl.Position = UDim2.fromOffset(10, 0)
-			optLbl.BackgroundTransparency = 1
-			optLbl.Text = opt
-			optLbl.Font = Enum.Font.Gotham
-			optLbl.TextSize = 11
-			optLbl.TextColor3 = theme.TextDim
-			optLbl.TextXAlignment = Enum.TextXAlignment.Left
-			optLbl.Parent = optBtn
+			local optLbl = newInst("TextLabel", {
+				Size = UDim2.new(1, -16, 1, 0),
+				Position = UDim2.fromOffset(10, 0),
+				BackgroundTransparency = 1,
+				Text = opt,
+				Font = Enum.Font.Gotham,
+				TextSize = 11,
+				TextColor3 = THEME.TextDim,
+				TextXAlignment = Enum.TextXAlignment.Left,
+			}, optBtn)
 
 			local function refresh()
 				local isSel = table.find(elem._current, opt) ~= nil
 				if isSel then
-					optBtn.BackgroundColor3 = theme.Accent[1]
-					optBtn.BackgroundTransparency = 0.6
-					optLbl.TextColor3 = theme.Text
+					optBtn.BackgroundColor3 = THEME.Accent
+					optBtn.BackgroundTransparency = 0.5
+					optLbl.TextColor3 = THEME.Text
 				else
-					optBtn.BackgroundColor3 = theme.ElementHover
+					optBtn.BackgroundColor3 = THEME.ElementHover
 					optBtn.BackgroundTransparency = 0
-					optLbl.TextColor3 = theme.TextDim
+					optLbl.TextColor3 = THEME.TextDim
 				end
 			end
 			refresh()
@@ -1656,25 +1410,20 @@ VaenHub._ElementBuilders.Dropdown = function(self, elem)
 			optBtn.MouseButton1Click:Connect(function()
 				local idx = table.find(elem._current, opt)
 				if elem._multi then
-					if idx then table.remove(elem._current, idx) else table.insert(elem._current, opt) end
+					if idx then table.remove(elem._current, idx)
+					else table.insert(elem._current, opt) end
 				else
 					elem._current = {opt}
 				end
-				pillText.Text = #elem._current > 0 and (#elem._current == 1 and elem._current[1] or (#elem._current .. " selected")) or "None"
+				pillText.Text = #elem._current > 0 and (#elem._current == 1 and elem._current[1] or (#elem._current.." selected")) or "None"
 				for _, c in ipairs(optsFrame:GetChildren()) do
 					if c:IsA("TextButton") then
 						local cl = c:FindFirstChildWhichIsA("TextLabel")
 						if cl then
 							local isSel = table.find(elem._current, cl.Text) ~= nil
-							if isSel then
-								c.BackgroundColor3 = theme.Accent[1]
-								c.BackgroundTransparency = 0.6
-								cl.TextColor3 = theme.Text
-							else
-								c.BackgroundColor3 = theme.ElementHover
-								c.BackgroundTransparency = 0
-								cl.TextColor3 = theme.TextDim
-							end
+							c.BackgroundColor3 = isSel and THEME.Accent or THEME.ElementHover
+							c.BackgroundTransparency = isSel and 0.5 or 0
+							cl.TextColor3 = isSel and THEME.Text or THEME.TextDim
 						end
 					end
 				end
@@ -1685,80 +1434,78 @@ VaenHub._ElementBuilders.Dropdown = function(self, elem)
 	end
 	refreshOptions()
 
-	-- Click to expand
-	local clickBtn = Instance.new("TextButton")
-	clickBtn.Size = UDim2.new(1, 0, 0, headerHeight)
-	clickBtn.BackgroundTransparency = 1
-	clickBtn.Text = ""
-	clickBtn.AutoButtonColor = false
-	clickBtn.Parent = frame
+	local clickBtn = newInst("TextButton", {
+		Size = UDim2.new(1, 0, 0, headerH),
+		BackgroundTransparency = 1,
+		Text = "",
+		AutoButtonColor = false,
+	}, frame)
 
 	local open = false
 	clickBtn.MouseButton1Click:Connect(function()
 		open = not open
 		local total = #elem._options * 30
 		if open then
-			tween(frame, 0.3, {Size = UDim2.new(1, 0, 0, headerHeight + total + 12)})
-			tween(pillArrow, 0.3, {Rotation = 180})
+			tween(frame, 0.25, {Size = UDim2.new(1, 0, 0, headerH + total + 12)})
+			tween(pillArrow, 0.25, {Rotation = 180})
 		else
-			tween(frame, 0.3, {Size = UDim2.new(1, 0, 0, headerHeight)})
-			tween(pillArrow, 0.3, {Rotation = 0})
+			tween(frame, 0.25, {Size = UDim2.new(1, 0, 0, headerH)})
+			tween(pillArrow, 0.25, {Rotation = 0})
 		end
 	end)
 
 	elem._frame = frame
-	elem._refreshOptions = refreshOptions
+	elem._refresh = refreshOptions
 	elem._update = function(v)
 		elem._current = type(v) == "table" and v or {v}
-		pillText.Text = #elem._current > 0 and (#elem._current == 1 and elem._current[1] or (#elem._current .. " selected")) or "None"
+		pillText.Text = #elem._current > 0 and (#elem._current == 1 and elem._current[1] or (#elem._current.." selected")) or "None"
 		refreshOptions()
 	end
 end
 
 -- INPUT
-VaenHub._ElementBuilders.Input = function(self, elem)
-	local theme = elem._window._theme
-	local frame = elementRow(elem, 40)
-	local iconImg, labelX = addRowIcon(frame, elem._icon, theme)
+VaenHub._Builders.Input = function(self, elem)
+	local frame = row(elem)
+	setupRow(frame)
 
-	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.fromOffset(120, 40)
-	lbl.Position = UDim2.fromOffset(labelX, 0)
-	lbl.BackgroundTransparency = 1
-	lbl.Text = elem._name
-	lbl.Font = Enum.Font.Gotham
-	lbl.TextSize = 13
-	lbl.TextColor3 = theme.Text
-	lbl.TextXAlignment = Enum.TextXAlignment.Left
-	lbl.Parent = frame
+	local lbl = newInst("TextLabel", {
+		Size = UDim2.fromOffset(130, ELEMENT_HEIGHT),
+		Position = UDim2.fromOffset(14, 0),
+		BackgroundTransparency = 1,
+		Text = elem._name,
+		Font = Enum.Font.Gotham,
+		TextSize = 13,
+		TextColor3 = THEME.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, frame)
 
-	local inputBg = Instance.new("Frame")
-	inputBg.AnchorPoint = Vector2.new(1, 0.5)
-	inputBg.Size = UDim2.new(0, 160, 0, 26)
-	inputBg.Position = UDim2.new(1, -14, 0.5, 0)
-	inputBg.BackgroundColor3 = theme.ElementHover
-	inputBg.BorderSizePixel = 0
-	inputBg.Parent = frame
+	local inputBg = newInst("Frame", {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Size = UDim2.new(0, 150, 0, 24),
+		Position = UDim2.new(1, -14, 0.5, 0),
+		BackgroundColor3 = THEME.ElementHover,
+		BorderSizePixel = 0,
+	}, frame)
 	corner(inputBg, 6)
-	local inputStroke = stroke(inputBg, Color3.fromRGB(255,255,255), 0.9)
+	local inputStrokeObj = stroke(inputBg, THEME.Border, 0.6)
 
-	local box = Instance.new("TextBox")
-	box.Size = UDim2.new(1, -16, 1, 0)
-	box.Position = UDim2.fromOffset(8, 0)
-	box.BackgroundTransparency = 1
-	box.Text = elem._default or ""
-	box.PlaceholderText = elem._placeholder or "..."
-	box.PlaceholderColor3 = theme.TextFaint
-	box.Font = Enum.Font.Gotham
-	box.TextSize = 12
-	box.TextColor3 = theme.Text
-	box.TextXAlignment = Enum.TextXAlignment.Left
-	box.ClearTextOnFocus = false
-	box.Parent = inputBg
+	local box = newInst("TextBox", {
+		Size = UDim2.new(1, -16, 1, 0),
+		Position = UDim2.fromOffset(8, 0),
+		BackgroundTransparency = 1,
+		Text = elem._default or "",
+		PlaceholderText = elem._placeholder or "...",
+		PlaceholderColor3 = THEME.TextFaint,
+		Font = Enum.Font.Gotham,
+		TextSize = 12,
+		TextColor3 = THEME.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ClearTextOnFocus = false,
+	}, inputBg)
 
-	box.Focused:Connect(function() tween(inputStroke, 0.2, {Color = theme.Accent[1], Transparency = 0.4}) end)
+	box.Focused:Connect(function() tween(inputStrokeObj, 0.15, {Color = THEME.Accent, Transparency = 0.3}) end)
 	box.FocusLost:Connect(function()
-		tween(inputStroke, 0.2, {Color = Color3.fromRGB(255,255,255), Transparency = 0.9})
+		tween(inputStrokeObj, 0.15, {Color = THEME.Border, Transparency = 0.6})
 		elem._current = box.Text
 		if elem._callback then task.spawn(pcall, elem._callback, box.Text) end
 		if elem._flag and elem._window._configSave.Enabled then elem._window:SaveConfig() end
@@ -1769,38 +1516,37 @@ VaenHub._ElementBuilders.Input = function(self, elem)
 end
 
 -- KEYBIND
-VaenHub._ElementBuilders.Keybind = function(self, elem)
-	local theme = elem._window._theme
+VaenHub._Builders.Keybind = function(self, elem)
 	elem._current = elem._default or "None"
 
-	local frame = elementRow(elem, 40)
-	local iconImg, labelX = addRowIcon(frame, elem._icon, theme)
+	local frame = row(elem)
+	setupRow(frame)
 
-	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.new(1, -labelX - 80, 1, 0)
-	lbl.Position = UDim2.fromOffset(labelX, 0)
-	lbl.BackgroundTransparency = 1
-	lbl.Text = elem._name
-	lbl.Font = Enum.Font.Gotham
-	lbl.TextSize = 13
-	lbl.TextColor3 = theme.Text
-	lbl.TextXAlignment = Enum.TextXAlignment.Left
-	lbl.Parent = frame
+	local lbl = newInst("TextLabel", {
+		Size = UDim2.new(1, -90, 1, 0),
+		Position = UDim2.fromOffset(14, 0),
+		BackgroundTransparency = 1,
+		Text = elem._name,
+		Font = Enum.Font.Gotham,
+		TextSize = 13,
+		TextColor3 = THEME.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, frame)
 
-	local bindBox = Instance.new("TextButton")
-	bindBox.AnchorPoint = Vector2.new(1, 0.5)
-	bindBox.Size = UDim2.fromOffset(60, 24)
-	bindBox.Position = UDim2.new(1, -14, 0.5, 0)
-	bindBox.BackgroundColor3 = theme.ElementHover
-	bindBox.BorderSizePixel = 0
-	bindBox.Text = elem._current
-	bindBox.Font = Enum.Font.GothamMedium
-	bindBox.TextSize = 11
-	bindBox.TextColor3 = theme.Text
-	bindBox.AutoButtonColor = false
-	bindBox.Parent = frame
+	local bindBox = newInst("TextButton", {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Size = UDim2.fromOffset(60, 24),
+		Position = UDim2.new(1, -14, 0.5, 0),
+		BackgroundColor3 = THEME.ElementHover,
+		BorderSizePixel = 0,
+		Text = elem._current,
+		Font = Enum.Font.GothamMedium,
+		TextSize = 11,
+		TextColor3 = THEME.Text,
+		AutoButtonColor = false,
+	}, frame)
 	corner(bindBox, 6)
-	stroke(bindBox, Color3.fromRGB(255,255,255), 0.92)
+	stroke(bindBox, THEME.Border, 0.6)
 
 	local capturing = false
 	bindBox.MouseButton1Click:Connect(function()
@@ -1824,53 +1570,52 @@ VaenHub._ElementBuilders.Keybind = function(self, elem)
 	elem._update = function(v) elem._current = v; bindBox.Text = tostring(v) end
 end
 
--- COLOR PICKER (simple — opens swatch grid)
-VaenHub._ElementBuilders.ColorPicker = function(self, elem)
-	local theme = elem._window._theme
+-- COLOR PICKER (cycles presets)
+VaenHub._Builders.ColorPicker = function(self, elem)
 	elem._current = elem._default or Color3.fromRGB(255,255,255)
 
-	local frame = elementRow(elem, 40)
-	local iconImg, labelX = addRowIcon(frame, elem._icon, theme)
+	local frame = row(elem)
+	setupRow(frame)
 
-	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.new(1, -labelX - 60, 1, 0)
-	lbl.Position = UDim2.fromOffset(labelX, 0)
-	lbl.BackgroundTransparency = 1
-	lbl.Text = elem._name
-	lbl.Font = Enum.Font.Gotham
-	lbl.TextSize = 13
-	lbl.TextColor3 = theme.Text
-	lbl.TextXAlignment = Enum.TextXAlignment.Left
-	lbl.Parent = frame
+	local lbl = newInst("TextLabel", {
+		Size = UDim2.new(1, -60, 1, 0),
+		Position = UDim2.fromOffset(14, 0),
+		BackgroundTransparency = 1,
+		Text = elem._name,
+		Font = Enum.Font.Gotham,
+		TextSize = 13,
+		TextColor3 = THEME.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, frame)
 
-	local swatch = Instance.new("Frame")
-	swatch.AnchorPoint = Vector2.new(1, 0.5)
-	swatch.Size = UDim2.fromOffset(32, 20)
-	swatch.Position = UDim2.new(1, -14, 0.5, 0)
-	swatch.BackgroundColor3 = elem._current
-	swatch.BorderSizePixel = 0
-	swatch.Parent = frame
+	local swatch = newInst("Frame", {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Size = UDim2.fromOffset(30, 20),
+		Position = UDim2.new(1, -14, 0.5, 0),
+		BackgroundColor3 = elem._current,
+		BorderSizePixel = 0,
+	}, frame)
 	corner(swatch, 4)
 	stroke(swatch, Color3.fromRGB(255,255,255), 0.75)
 
-	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.fromScale(1, 1)
-	btn.BackgroundTransparency = 1
-	btn.Text = ""
-	btn.AutoButtonColor = false
-	btn.Parent = frame
+	local btn = newInst("TextButton", {
+		Size = UDim2.fromScale(1,1),
+		BackgroundTransparency = 1,
+		Text = "",
+		AutoButtonColor = false,
+	}, frame)
 
 	local presets = {
 		Color3.fromRGB(255,255,255), Color3.fromRGB(239,68,68),
 		Color3.fromRGB(250,204,21), Color3.fromRGB(34,197,94),
-		Color3.fromRGB(56,189,248), Color3.fromRGB(168,85,247),
+		Color3.fromRGB(56,189,248), Color3.fromRGB(139,92,246),
 		Color3.fromRGB(244,114,182),
 	}
 	local idx = 1
 	btn.MouseButton1Click:Connect(function()
 		idx = idx % #presets + 1
 		elem._current = presets[idx]
-		tween(swatch, 0.2, {BackgroundColor3 = elem._current})
+		tween(swatch, 0.15, {BackgroundColor3 = elem._current})
 		if elem._callback then task.spawn(pcall, elem._callback, elem._current) end
 		if elem._flag and elem._window._configSave.Enabled then elem._window:SaveConfig() end
 	end)
@@ -1880,113 +1625,103 @@ VaenHub._ElementBuilders.ColorPicker = function(self, elem)
 end
 
 -- LABEL
-VaenHub._ElementBuilders.Label = function(self, elem)
-	local theme = elem._window._theme
-	local frame = Instance.new("Frame")
-	frame.Size = UDim2.new(1, 0, 0, 22)
-	frame.BackgroundTransparency = 1
-	frame.Parent = elem._tab._page
-
-	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.fromScale(1,1)
-	lbl.Position = UDim2.fromOffset(4, 0)
-	lbl.BackgroundTransparency = 1
-	lbl.Text = elem._name
-	lbl.Font = Enum.Font.Gotham
-	lbl.TextSize = 12
-	lbl.TextColor3 = theme.TextDim
-	lbl.TextXAlignment = Enum.TextXAlignment.Left
-	lbl.Parent = frame
-
+VaenHub._Builders.Label = function(self, elem)
+	local frame = newInst("Frame", {
+		Size = UDim2.new(1, 0, 0, 22),
+		BackgroundTransparency = 1,
+	}, elem._tab._page)
+	local lbl = newInst("TextLabel", {
+		Size = UDim2.fromScale(1,1),
+		Position = UDim2.fromOffset(4, 0),
+		BackgroundTransparency = 1,
+		Text = elem._name,
+		Font = Enum.Font.Gotham,
+		TextSize = 12,
+		TextColor3 = THEME.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, frame)
 	elem._frame = frame
 	elem._update = function(v) lbl.Text = v end
 end
 
--- SECTION (header, smaller, uppercase-ish styling)
-VaenHub._ElementBuilders.Section = function(self, elem)
-	local theme = elem._window._theme
-	local frame = Instance.new("Frame")
-	frame.Size = UDim2.new(1, 0, 0, 22)
-	frame.BackgroundTransparency = 1
-	frame.Parent = elem._tab._page
-
-	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.fromScale(1,1)
-	lbl.Position = UDim2.fromOffset(4, 4)
-	lbl.BackgroundTransparency = 1
-	lbl.Text = elem._name:upper()
-	lbl.Font = Enum.Font.GothamBold
-	lbl.TextSize = 10
-	lbl.TextColor3 = theme.TextFaint
-	lbl.TextXAlignment = Enum.TextXAlignment.Left
-	lbl.Parent = frame
-
+-- SECTION (small caps header)
+VaenHub._Builders.Section = function(self, elem)
+	local frame = newInst("Frame", {
+		Size = UDim2.new(1, 0, 0, 24),
+		BackgroundTransparency = 1,
+	}, elem._tab._page)
+	newInst("TextLabel", {
+		Size = UDim2.fromScale(1,1),
+		Position = UDim2.fromOffset(4, 8),
+		BackgroundTransparency = 1,
+		Text = elem._name:upper(),
+		Font = Enum.Font.GothamBold,
+		TextSize = 10,
+		TextColor3 = THEME.TextFaint,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, frame)
 	elem._frame = frame
 end
 
 -- DIVIDER
-VaenHub._ElementBuilders.Divider = function(self, elem)
-	local theme = elem._window._theme
-	local frame = Instance.new("Frame")
-	frame.Size = UDim2.new(1, 0, 0, 10)
-	frame.BackgroundTransparency = 1
-	frame.Parent = elem._tab._page
-
-	local line = Instance.new("Frame")
-	line.AnchorPoint = Vector2.new(0, 0.5)
-	line.Size = UDim2.new(1, -8, 0, 1)
-	line.Position = UDim2.new(0, 4, 0.5, 0)
-	line.BackgroundColor3 = Color3.fromRGB(255,255,255)
-	line.BackgroundTransparency = 0.92
-	line.BorderSizePixel = 0
-	line.Parent = frame
-
+VaenHub._Builders.Divider = function(self, elem)
+	local frame = newInst("Frame", {
+		Size = UDim2.new(1, 0, 0, 8),
+		BackgroundTransparency = 1,
+	}, elem._tab._page)
+	newInst("Frame", {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Size = UDim2.new(1, -8, 0, 1),
+		Position = UDim2.new(0, 4, 0.5, 0),
+		BackgroundColor3 = Color3.fromRGB(255,255,255),
+		BackgroundTransparency = 0.92,
+		BorderSizePixel = 0,
+	}, frame)
 	elem._frame = frame
 end
 
 -- PARAGRAPH
-VaenHub._ElementBuilders.Paragraph = function(self, elem)
-	local theme = elem._window._theme
-	local frame = Instance.new("Frame")
-	frame.AutomaticSize = Enum.AutomaticSize.Y
-	frame.Size = UDim2.new(1, 0, 0, 0)
-	frame.BackgroundColor3 = theme.ElementBg
-	frame.BorderSizePixel = 0
-	frame.Parent = elem._tab._page
-	corner(frame, 8)
-	stroke(frame, Color3.fromRGB(255,255,255), 0.94)
-	padding(frame, 10, 14, 10, 14)
+VaenHub._Builders.Paragraph = function(self, elem)
+	local frame = newInst("Frame", {
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Size = UDim2.new(1, 0, 0, 0),
+		BackgroundColor3 = THEME.ElementBg,
+		BorderSizePixel = 0,
+	}, elem._tab._page)
+	corner(frame, CORNER_RADIUS)
+	stroke(frame, THEME.Border, 0.7)
+	padding(frame, 10, 14, 12, 14)
 
-	local title = Instance.new("TextLabel")
-	title.Size = UDim2.new(1, 0, 0, 18)
-	title.BackgroundTransparency = 1
-	title.Text = elem._name
-	title.Font = Enum.Font.GothamMedium
-	title.TextSize = 12
-	title.TextColor3 = theme.Text
-	title.TextXAlignment = Enum.TextXAlignment.Left
-	title.Parent = frame
+	newInst("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 18),
+		BackgroundTransparency = 1,
+		Text = elem._name,
+		Font = Enum.Font.GothamMedium,
+		TextSize = 12,
+		TextColor3 = THEME.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, frame)
 
-	local content = Instance.new("TextLabel")
-	content.AutomaticSize = Enum.AutomaticSize.Y
-	content.Size = UDim2.new(1, 0, 0, 0)
-	content.Position = UDim2.fromOffset(0, 22)
-	content.BackgroundTransparency = 1
-	content.Text = elem._content or ""
-	content.Font = Enum.Font.Gotham
-	content.TextSize = 11
-	content.TextColor3 = theme.TextDim
-	content.TextXAlignment = Enum.TextXAlignment.Left
-	content.TextYAlignment = Enum.TextYAlignment.Top
-	content.TextWrapped = true
-	content.Parent = frame
+	local content = newInst("TextLabel", {
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Size = UDim2.new(1, 0, 0, 0),
+		Position = UDim2.fromOffset(0, 22),
+		BackgroundTransparency = 1,
+		Text = elem._content or "",
+		Font = Enum.Font.Gotham,
+		TextSize = 11,
+		TextColor3 = THEME.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextWrapped = true,
+	}, frame)
 
 	elem._frame = frame
 	elem._setContent = function(c) content.Text = c end
 end
 
 --==============================================================
--- CONFIG SAVE/LOAD
+-- 9. CONFIG SAVE/LOAD
 --==============================================================
 function VaenHub:_SaveConfig(win, profile)
 	if not (writefile and makefolder) then return end
@@ -2004,16 +1739,16 @@ function VaenHub:_SaveConfig(win, profile)
 	pcall(function()
 		if not isfolder("VaenHub") then makefolder("VaenHub") end
 		if not isfolder("VaenHub/Configs") then makefolder("VaenHub/Configs") end
-		local folder = "VaenHub/Configs/" .. (win._configSave.FolderName or win._name)
+		local folder = "VaenHub/Configs/"..(win._configSave.FolderName or win._name)
 		if not isfolder(folder) then makefolder(folder) end
-		writefile(folder .. "/" .. profile .. ".vhc", HttpService:JSONEncode(data))
+		writefile(folder.."/"..profile..".vhc", HttpService:JSONEncode(data))
 	end)
 end
 
 function VaenHub:_LoadConfig(win, profile)
 	if not (readfile and isfile) then return end
-	local folder = "VaenHub/Configs/" .. (win._configSave.FolderName or win._name)
-	local path = folder .. "/" .. profile .. ".vhc"
+	local folder = "VaenHub/Configs/"..(win._configSave.FolderName or win._name)
+	local path = folder.."/"..profile..".vhc"
 	if not isfile(path) then return end
 	local ok, data = pcall(function() return HttpService:JSONDecode(readfile(path)) end)
 	if not ok or not data then return end
@@ -2029,156 +1764,122 @@ function VaenHub:_LoadConfig(win, profile)
 end
 
 --==============================================================
--- NOTIFICATIONS
+-- 10. NOTIFICATIONS
 --==============================================================
 VaenHub._notifContainer = nil
 VaenHub._notifActive = 0
 VaenHub._notifQueue = {}
 
 function VaenHub:_QueueNotif(d)
-	if not self._notifContainer then self:_CreateNotifContainer() end
+	if not self._notifContainer then self:_MakeNotifContainer() end
 	if self._notifActive >= 4 then table.insert(self._notifQueue, d); return end
 	self:_ShowNotif(d)
 end
 
-function VaenHub:_CreateNotifContainer()
-	local g = Instance.new("ScreenGui")
-	g.Name = "VHNotif_" .. HttpService:GenerateGUID(false):sub(1,6)
-	g.IgnoreGuiInset = true
-	g.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	g.DisplayOrder = 200
+function VaenHub:_MakeNotifContainer()
+	local g = newInst("ScreenGui", {
+		Name = "VHNotif_"..HttpService:GenerateGUID(false):sub(1,6),
+		IgnoreGuiInset = true,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		DisplayOrder = 200,
+		ResetOnSpawn = false,
+	})
 	if gethui then g.Parent = gethui() else g.Parent = CoreGui end
-
-	local c = Instance.new("Frame")
-	c.AnchorPoint = Vector2.new(1, 1)
-	c.Position = UDim2.new(1, -20, 1, -20)
-	c.Size = UDim2.fromOffset(320, 400)
-	c.BackgroundTransparency = 1
-	c.Parent = g
-
+	local c = newInst("Frame", {
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, -20, 1, -20),
+		Size = UDim2.fromOffset(300, 400),
+		BackgroundTransparency = 1,
+	}, g)
 	local l = listLayout(c, 8)
 	l.VerticalAlignment = Enum.VerticalAlignment.Bottom
 	l.HorizontalAlignment = Enum.HorizontalAlignment.Right
-
 	self._notifContainer = c
 end
 
 function VaenHub:_ShowNotif(d)
 	self._notifActive = self._notifActive + 1
-	local theme = self.Presets.Phantom
-
-	local n = Instance.new("Frame")
-	n.Size = UDim2.new(1, 0, 0, 64)
-	n.BackgroundColor3 = theme.ElementBg
-	n.BorderSizePixel = 0
-	n.Parent = self._notifContainer
+	local n = newInst("Frame", {
+		Size = UDim2.new(1, 0, 0, 62),
+		BackgroundColor3 = THEME.ElementBg,
+		BorderSizePixel = 0,
+	}, self._notifContainer)
 	corner(n, 10)
-	stroke(n, Color3.fromRGB(255,255,255), 0.86)
+	stroke(n, THEME.Border, 0.5)
 
-	-- Accent stripe
-	local stripe = Instance.new("Frame")
-	stripe.Size = UDim2.fromOffset(3, 32)
-	stripe.Position = UDim2.fromOffset(0, 16)
-	stripe.BorderSizePixel = 0
-	if d.Type == "success" then stripe.BackgroundColor3 = theme.Success
-	elseif d.Type == "warning" then stripe.BackgroundColor3 = theme.Warning
-	elseif d.Type == "error" then stripe.BackgroundColor3 = theme.Danger
-	else stripe.BackgroundColor3 = theme.Accent[1] end
-	stripe.Parent = n
+	local accentColor = THEME.Accent
+	if d.Type == "success" then accentColor = THEME.Success
+	elseif d.Type == "warning" then accentColor = THEME.Warning
+	elseif d.Type == "error" then accentColor = THEME.Danger end
+
+	-- Stripe
+	local stripe = newInst("Frame", {
+		Size = UDim2.fromOffset(3, 30),
+		Position = UDim2.fromOffset(0, 16),
+		BackgroundColor3 = accentColor,
+		BorderSizePixel = 0,
+	}, n)
 	corner(stripe, 2)
 
-	local title = Instance.new("TextLabel")
-	title.Size = UDim2.new(1, -24, 0, 18)
-	title.Position = UDim2.fromOffset(14, 10)
-	title.BackgroundTransparency = 1
-	title.Text = d.Title
-	title.Font = Enum.Font.GothamMedium
-	title.TextSize = 12
-	title.TextColor3 = theme.Text
-	title.TextXAlignment = Enum.TextXAlignment.Left
-	title.Parent = n
+	local title = newInst("TextLabel", {
+		Size = UDim2.new(1, -24, 0, 18),
+		Position = UDim2.fromOffset(14, 10),
+		BackgroundTransparency = 1,
+		Text = d.Title,
+		Font = Enum.Font.GothamMedium,
+		TextSize = 12,
+		TextColor3 = THEME.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, n)
 
-	local content = Instance.new("TextLabel")
-	content.Size = UDim2.new(1, -24, 0, 32)
-	content.Position = UDim2.fromOffset(14, 28)
-	content.BackgroundTransparency = 1
-	content.Text = d.Content
-	content.Font = Enum.Font.Gotham
-	content.TextSize = 11
-	content.TextColor3 = theme.TextDim
-	content.TextXAlignment = Enum.TextXAlignment.Left
-	content.TextYAlignment = Enum.TextYAlignment.Top
-	content.TextWrapped = true
-	content.Parent = n
+	local content = newInst("TextLabel", {
+		Size = UDim2.new(1, -24, 0, 30),
+		Position = UDim2.fromOffset(14, 28),
+		BackgroundTransparency = 1,
+		Text = d.Content,
+		Font = Enum.Font.Gotham,
+		TextSize = 11,
+		TextColor3 = THEME.TextDim,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextWrapped = true,
+	}, n)
 
 	n.Position = UDim2.new(1, 50, 0, 0)
-	tween(n, 0.4, {Position = UDim2.fromOffset(0, 0)})
+	tween(n, 0.35, {Position = UDim2.fromOffset(0, 0)})
 
 	task.delay(d.Duration, function()
-		tween(n, 0.4, {BackgroundTransparency = 1})
-		tween(title, 0.4, {TextTransparency = 1})
-		tween(content, 0.4, {TextTransparency = 1})
-		task.wait(0.4)
+		tween(n, 0.35, {BackgroundTransparency = 1})
+		tween(title, 0.35, {TextTransparency = 1})
+		tween(content, 0.35, {TextTransparency = 1})
+		task.wait(0.35)
 		n:Destroy()
 		self._notifActive = self._notifActive - 1
-		if #self._notifQueue > 0 then
-			self:_ShowNotif(table.remove(self._notifQueue, 1))
-		end
+		if #self._notifQueue > 0 then self:_ShowNotif(table.remove(self._notifQueue, 1)) end
 	end)
 end
 
 --==============================================================
--- ANIMATION HELPERS
---==============================================================
-function VaenHub:_AnimateHide(win)
-	if not win._main then return end
-	tween(win._main, 0.4, {Size = UDim2.fromOffset(620, 0)}, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
-end
-
-function VaenHub:_AnimateShow(win)
-	if not win._main then return end
-	tween(win._main, 0.5, {Size = UDim2.fromOffset(620, 420)})
-end
-
-function VaenHub:_AnimateMinimise(win)
-	if win._minimised then
-		tween(win._main, 0.4, {Size = UDim2.fromOffset(620, 44)})
-		win._content.Visible = false
-		win._tabBar.Visible = false
-	else
-		win._content.Visible = true
-		win._tabBar.Visible = true
-		tween(win._main, 0.4, {Size = UDim2.fromOffset(620, 420)})
-	end
-end
-
---==============================================================
--- 12. UTILITIES
+-- 11. UTILITIES
 --==============================================================
 function VaenHub:_MakeDraggable(frame, handle)
 	local dragging, dragStart, startPos
-	handle.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1
-			or input.UserInputType == Enum.UserInputType.Touch then
+	handle.InputBegan:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
 			dragging = true
-			dragStart = input.Position
+			dragStart = i.Position
 			startPos = frame.Position
 		end
 	end)
-	handle.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1
-			or input.UserInputType == Enum.UserInputType.Touch then
+	handle.InputEnded:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
 			dragging = false
 		end
 	end)
-	UserInputService.InputChanged:Connect(function(input)
-		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
-			or input.UserInputType == Enum.UserInputType.Touch) then
-			local delta = input.Position - dragStart
-			frame.Position = UDim2.new(
-				startPos.X.Scale, startPos.X.Offset + delta.X,
-				startPos.Y.Scale, startPos.Y.Offset + delta.Y
-			)
+	UserInputService.InputChanged:Connect(function(i)
+		if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+			local d = i.Position - dragStart
+			frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
 		end
 	end)
 end
