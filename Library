@@ -1,6 +1,6 @@
 --[[
 	╔══════════════════════════════════════════════════════════╗
-	║                    VaenHub v2.7                          ║
+	║                    VaenHub v2.9                          ║
 	║       Final polish + spec fixes — by Dalkoski            ║
 	╚══════════════════════════════════════════════════════════╝
 ]]
@@ -48,7 +48,7 @@ local RADIUS = 8
 --==============================================================
 -- ROOT + FORWARD DECLS
 --==============================================================
-local VaenHub = { Version = "2.7.0", Flags = {}, Windows = {} }
+local VaenHub = { Version = "2.9.0", Flags = {}, Windows = {} }
 local Window = {}
 local Tab = {}
 local Elem = {}
@@ -141,7 +141,7 @@ function VaenHub:CreateWindow(cfg)
 		_protect = cfg.Protect or {},
 		_configSave = cfg.Config or {},
 		_name = cfg.Name or "VaenHub",
-		_version = cfg.Version or "v2.7",
+		_version = cfg.Version or "v2.9",
 		_currentTab = nil,
 		_tabOrder = 0,
 	}, {__index = Window})
@@ -245,30 +245,28 @@ function Window:_SelectTab(tab)
 		local sel = (t == tab)
 		t._page.Visible = sel
 		if sel then
+			-- ACTIVE — set instantly, no tween
 			t._button.BackgroundColor3 = Color3.fromRGB(38, 32, 64)
-			tween(t._button, 0.2, {BackgroundTransparency = 0})
-			if t._gradient then t._gradient.Transparency = NumberSequence.new(1) end
-			tween(t._buttonLabel, 0.2, {TextColor3 = Color3.fromRGB(255, 255, 255)})
+			t._button.BackgroundTransparency = 0
+			t._buttonLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 			if t._buttonIcon then
 				if t._buttonIcon:IsA("ImageLabel") then
-					tween(t._buttonIcon, 0.2, {ImageColor3 = Color3.fromRGB(255, 255, 255)})
+					t._buttonIcon.ImageColor3 = Color3.fromRGB(255, 255, 255)
 				else
-					tween(t._buttonIcon, 0.2, {TextColor3 = Color3.fromRGB(255, 255, 255)})
+					t._buttonIcon.TextColor3 = Color3.fromRGB(255, 255, 255)
 				end
 			end
-			if t._buttonStroke then t._buttonStroke.Transparency = 1 end
 		else
-			tween(t._button, 0.2, {BackgroundTransparency = 1})
-			if t._gradient then t._gradient.Transparency = NumberSequence.new(1) end
-			tween(t._buttonLabel, 0.2, {TextColor3 = Color3.fromRGB(140, 140, 155)})
+			-- INACTIVE
+			t._button.BackgroundTransparency = 1
+			t._buttonLabel.TextColor3 = Color3.fromRGB(140, 140, 155)
 			if t._buttonIcon then
 				if t._buttonIcon:IsA("ImageLabel") then
-					tween(t._buttonIcon, 0.2, {ImageColor3 = Color3.fromRGB(140, 140, 155)})
+					t._buttonIcon.ImageColor3 = Color3.fromRGB(140, 140, 155)
 				else
-					tween(t._buttonIcon, 0.2, {TextColor3 = Color3.fromRGB(140, 140, 155)})
+					t._buttonIcon.TextColor3 = Color3.fromRGB(140, 140, 155)
 				end
 			end
-			if t._buttonStroke then t._buttonStroke.Transparency = 1 end
 		end
 	end
 	self._currentTab = tab
@@ -791,20 +789,35 @@ function VaenHub:_BuildWindow(win)
 		Size = UDim2.new(1, 0, 0, TABBAR_H),
 		Position = UDim2.fromOffset(0, TOPBAR_H),
 		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ClipsDescendants = false,
 	}, main)
 	win._tabBar = tabBar
 
-	new("Frame", {
+	-- Bottom hairline goes on its OWN frame so UIListLayout doesn't touch it
+	local tabBarBottom = new("Frame", {
 		Size = UDim2.new(1, 0, 0, 1),
 		Position = UDim2.new(0, 0, 1, -1),
 		BackgroundColor3 = Color3.fromRGB(255,255,255),
 		BackgroundTransparency = 0.93,
 		BorderSizePixel = 0,
+		ZIndex = 5,
+	}, main)  -- parent to main, not tabBar!
+	tabBarBottom.Position = UDim2.new(0, 0, 0, TOPBAR_H + TABBAR_H - 1)
+
+	-- UIListLayout on tabBar — this will arrange tab pills horizontally
+	local tbl = new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 6),
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		HorizontalAlignment = Enum.HorizontalAlignment.Left,
+		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, tabBar)
 
-	local tbl = list(tabBar, 6, Enum.FillDirection.Horizontal)
-	tbl.VerticalAlignment = Enum.VerticalAlignment.Center
-	pad(tabBar, 0, 14, 0, 14)
+	local tabBarPad = new("UIPadding", {
+		PaddingLeft = UDim.new(0, 14),
+		PaddingRight = UDim.new(0, 14),
+	}, tabBar)
 
 	-- CONTENT
 	local content = new("Frame", {
@@ -836,21 +849,21 @@ function VaenHub:_BuildTab(win, t)
 	local approxTextWidth = #t._name * 7  -- ~7px per char at GothamMedium 12
 	local btnWidth = 24 + approxTextWidth + (hasIcon and 22 or 0)
 
-	-- Tab pill — explicit size, UIListLayout handles positioning + centering
+	-- Tab pill — INACTIVE by default (transparent). _SelectTab will set active state instantly.
 	local btn = new("Frame", {
-		Name = t._name,
-		Size = UDim2.fromOffset(btnWidth, 28),
+		Name = "Tab_" .. t._name,
+		Size = UDim2.fromOffset(btnWidth, 30),
 		BackgroundColor3 = Color3.fromRGB(38, 32, 64),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		LayoutOrder = win._tabOrder,
+		Visible = true,
+		ClipsDescendants = false,
 	}, win._tabBar)
 	corner(btn, 6)
 
-	local btnGradient = gradient(btn, THEME.AccentStart, THEME.AccentEnd, 135)
-	btnGradient.Transparency = NumberSequence.new(1)
-
-	local btnStroke = stroke(btn, THEME.AccentGlow, 1, 1)
+	-- No gradient overlay on tabs (keeps active fill solid violet per spec)
+	local btnStroke = nil
 
 	-- Icon (text glyph OR image asset) — explicit positioning, no auto-size chaining
 	local iconLbl
@@ -906,7 +919,7 @@ function VaenHub:_BuildTab(win, t)
 	t._buttonLabel = lbl
 	t._buttonIcon = iconLbl
 	t._buttonStroke = btnStroke
-	t._gradient = btnGradient
+	t._gradient = nil
 
 	clickBtn.MouseButton1Click:Connect(function() win:_SelectTab(t) end)
 	clickBtn.MouseEnter:Connect(function()
@@ -1071,6 +1084,19 @@ VaenHub._Builders.Toggle = function(self, elem)
 		BorderSizePixel = 0,
 	}, f)
 	corner(track, 9)
+
+	-- Neon glow underneath the track (your spec — rbxassetid 4998051433)
+	local trackGlow = new("ImageLabel", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.new(1, 16, 1, 16),
+		Position = UDim2.fromScale(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Image = "rbxassetid://4998051433",
+		ImageColor3 = THEME.AccentEnd,
+		ImageTransparency = 1,
+		ZIndex = 0,
+	}, track)
+
 	local trackGrad = gradient(track, THEME.AccentStart, THEME.AccentEnd, 90)
 	trackGrad.Enabled = false
 
@@ -1080,6 +1106,7 @@ VaenHub._Builders.Toggle = function(self, elem)
 		AnchorPoint = Vector2.new(0, 0.5),
 		BackgroundColor3 = Color3.fromRGB(255,255,255),
 		BorderSizePixel = 0,
+		ZIndex = 2,
 	}, track)
 	corner(thumb, 7)
 	local glow = new("UIStroke", {Color = THEME.AccentGlow, Transparency = 1, Thickness = 2}, thumb)
@@ -1095,11 +1122,13 @@ VaenHub._Builders.Toggle = function(self, elem)
 			track.BackgroundColor3 = v and THEME.AccentStart or THEME.ElementHover
 			trackGrad.Enabled = v
 			glow.Transparency = v and 0.5 or 1
+			trackGlow.ImageTransparency = v and 0.6 or 1
 		else
 			tween(thumb, 0.22, {Position = pos, AnchorPoint = anc})
 			tween(track, 0.22, {BackgroundColor3 = v and THEME.AccentStart or THEME.ElementHover})
 			trackGrad.Enabled = v
 			tween(glow, 0.22, {Transparency = v and 0.5 or 1})
+			tween(trackGlow, 0.22, {ImageTransparency = v and 0.6 or 1})
 		end
 	end
 
