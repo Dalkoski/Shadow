@@ -1,6 +1,6 @@
 --[[
 	╔══════════════════════════════════════════════════════════╗
-	║                    VaenHub v2.6                          ║
+	║                    VaenHub v2.7                          ║
 	║       Final polish + spec fixes — by Dalkoski            ║
 	╚══════════════════════════════════════════════════════════╝
 ]]
@@ -48,7 +48,7 @@ local RADIUS = 8
 --==============================================================
 -- ROOT + FORWARD DECLS
 --==============================================================
-local VaenHub = { Version = "2.6.0", Flags = {}, Windows = {} }
+local VaenHub = { Version = "2.7.0", Flags = {}, Windows = {} }
 local Window = {}
 local Tab = {}
 local Elem = {}
@@ -141,7 +141,7 @@ function VaenHub:CreateWindow(cfg)
 		_protect = cfg.Protect or {},
 		_configSave = cfg.Config or {},
 		_name = cfg.Name or "VaenHub",
-		_version = cfg.Version or "v2.6",
+		_version = cfg.Version or "v2.7",
 		_currentTab = nil,
 		_tabOrder = 0,
 	}, {__index = Window})
@@ -831,12 +831,16 @@ end
 function VaenHub:_BuildTab(win, t)
 	win._tabOrder = win._tabOrder + 1
 
-	-- Pill button — uses spec color background when active
+	-- Calculate label width manually to avoid AutomaticSize chaining issues
+	local hasIcon = t._icon and (GLYPHS[t._icon] or (type(t._icon) == "string" and (t._icon:match("^rbxasset") or t._icon:match("^%d+$"))))
+	local approxTextWidth = #t._name * 7  -- ~7px per char at GothamMedium 12
+	local btnWidth = 24 + approxTextWidth + (hasIcon and 22 or 0)
+
+	-- Tab pill — explicit size, UIListLayout handles positioning + centering
 	local btn = new("Frame", {
 		Name = t._name,
-		AutomaticSize = Enum.AutomaticSize.X,
-		Size = UDim2.new(0, 0, 0, 28),
-		BackgroundColor3 = Color3.fromRGB(45, 35, 75),
+		Size = UDim2.fromOffset(btnWidth, 28),
+		BackgroundColor3 = Color3.fromRGB(38, 32, 64),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		LayoutOrder = win._tabOrder,
@@ -848,49 +852,47 @@ function VaenHub:_BuildTab(win, t)
 
 	local btnStroke = stroke(btn, THEME.AccentGlow, 1, 1)
 
-	pad(btn, 0, 12, 0, 12)
-	local innerLayout = new("UIListLayout", {
-		FillDirection = Enum.FillDirection.Horizontal,
-		Padding = UDim.new(0, 6),
-		VerticalAlignment = Enum.VerticalAlignment.Center,
-		SortOrder = Enum.SortOrder.LayoutOrder,
-	}, btn)
-
-	-- Icon (text glyph OR image asset)
+	-- Icon (text glyph OR image asset) — explicit positioning, no auto-size chaining
 	local iconLbl
+	local labelX = 12
 	if t._icon then
 		if type(t._icon) == "string" and (t._icon:match("^rbxasset") or t._icon:match("^%d+$") or t._icon:match("^rbxassetid")) then
 			local src = (t._icon:match("^rbxasset") or t._icon:match("^rbxassetid")) and t._icon or ("rbxassetid://" .. t._icon)
 			iconLbl = new("ImageLabel", {
+				AnchorPoint = Vector2.new(0, 0.5),
 				Size = UDim2.fromOffset(14, 14),
+				Position = UDim2.new(0, 12, 0.5, 0),
 				BackgroundTransparency = 1,
 				Image = src,
-				ImageColor3 = THEME.TextDim,
-				LayoutOrder = 1,
+				ImageColor3 = Color3.fromRGB(140, 140, 155),
 			}, btn)
+			labelX = 32
 		elseif GLYPHS[t._icon] then
 			iconLbl = new("TextLabel", {
-				AutomaticSize = Enum.AutomaticSize.X,
-				Size = UDim2.new(0, 0, 0, 14),
+				AnchorPoint = Vector2.new(0, 0.5),
+				Size = UDim2.fromOffset(14, 28),
+				Position = UDim2.new(0, 12, 0.5, 0),
 				BackgroundTransparency = 1,
 				Text = GLYPHS[t._icon],
 				Font = Enum.Font.GothamBold,
 				TextSize = 13,
-				TextColor3 = THEME.TextDim,
-				LayoutOrder = 1,
+				TextColor3 = Color3.fromRGB(140, 140, 155),
+				TextXAlignment = Enum.TextXAlignment.Center,
 			}, btn)
+			labelX = 32
 		end
 	end
 
 	local lbl = new("TextLabel", {
-		AutomaticSize = Enum.AutomaticSize.X,
-		Size = UDim2.new(0, 0, 1, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Size = UDim2.new(1, -(labelX + 12), 1, 0),
+		Position = UDim2.new(0, labelX, 0.5, 0),
 		BackgroundTransparency = 1,
 		Text = t._name,
 		Font = Enum.Font.GothamMedium,
 		TextSize = 12,
-		TextColor3 = THEME.TextDim,
-		LayoutOrder = 2,
+		TextColor3 = Color3.fromRGB(140, 140, 155),
+		TextXAlignment = Enum.TextXAlignment.Left,
 	}, btn)
 
 	local clickBtn = new("TextButton", {
