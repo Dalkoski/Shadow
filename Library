@@ -3550,4 +3550,124 @@ UserInputService.InputBegan:Connect(function(input, processed)
     Library:SetVisibility(not anyVisible)
 end)
 
+-- ============================================================
+-- INLINE TEST SCRIPT (auto-runs when library is loaded)
+-- Remove this section before publishing.
+-- ============================================================
+task.spawn(function()
+    Library:RegisterTheme("Crimson", {
+        BgDeep = Color3.fromRGB(20, 10, 12), BgLight = Color3.fromRGB(30, 14, 18),
+        TextPrimary = Color3.fromRGB(255, 235, 235), Success = Color3.fromRGB(167, 243, 208),
+        Danger = Color3.fromRGB(220, 38, 38), Warning = Color3.fromRGB(251, 191, 36),
+        Accent = Color3.fromRGB(239, 68, 68), KnobOn = Color3.fromRGB(20, 10, 12),
+    })
+
+    Library.Defaults.Toggle.Tooltip = "Click to toggle"
+
+    local Window = Library:CreateWindow({
+        Name = "Shadow",
+        Subtitle = "v" .. Library.Version,
+        LogoText = "S",
+        ToggleUIKeybind = "K",
+        Discord = "discord.gg/shadow",
+        Theme = "Default",
+        LoadingScreen = true,
+        LoadingDuration = 1.4,
+        KeySystem = false,
+        ConfigurationSaving = {
+            Enabled = true,
+            FolderName = "Shadow",
+            FileName = "Default",
+        },
+    })
+    if not Window then return end
+
+    local Home = Window:CreateHomeTab({
+        Discord = "https://discord.gg/shadow",
+        Links = {
+            { Name = "Copy YouTube", Icon = "youtube", Value = "https://youtube.com/@dalkoski" },
+            { Name = "Open Wiki", Icon = "book-open", Callback = function() Library:Toast("Wiki opened.") end },
+        },
+        Feedback = {
+            Webhook = "",
+            Placeholder = "What can we improve?",
+            Username = "Shadow Feedback",
+        },
+        Universal = {
+            WalkSpeed = true, JumpPower = true,
+            InfiniteJump = true, NoClip = true, Server = true,
+        },
+        Credits = {
+            Script = "@Dalkoski",
+            UI = "Shadow Library",
+            Items = {
+                { Text = "Lucide icons by Sirius Software", Icon = "heart" },
+            },
+            Disclaimer = "Educational use only. You are responsible for how you use this script.",
+        },
+    })
+
+    Home:CreateSection("Live info")
+
+    Home:CreateLabel({
+        Text = function() return "Players online: " .. #game.Players:GetPlayers() end,
+        Icon = "users",
+        RefreshInterval = 1,
+    })
+
+    local fps = 60
+    game:GetService("RunService").Heartbeat:Connect(function(dt) fps = 1 / math.max(dt, 1/240) end)
+    Home:CreateLabel({
+        Text = function() return "FPS: " .. math.floor(fps) end,
+        Icon = "activity",
+        RefreshInterval = 0.5,
+    })
+
+    local Elements = Window:CreateTab("Elements", "layout-grid")
+
+    Elements:CreateSection("Toggle / Slider")
+    local demoToggle = Elements:CreateToggle({
+        Name = "Toggle example", Description = "Toggles a feature on/off",
+        Icon = "toggle-left", CurrentValue = false, Flag = "demo_toggle",
+        Callback = function(v) Library:Toast("Toggle: " .. tostring(v)) end,
+    })
+    Elements:CreateSlider({
+        Name = "Slider example", Icon = "sliders-horizontal",
+        Range = {0, 100}, Increment = 1, Suffix = "%",
+        CurrentValue = 50, Flag = "demo_slider",
+        Callback = function(v) print("Slider:", v) end,
+    })
+
+    Elements:CreateSection("Dropdown")
+    Elements:CreateDropdown({
+        Name = "Single select", Icon = "list",
+        Options = { "Apple", "Banana", "Cherry" },
+        CurrentOption = "Apple", Flag = "demo_dd_single",
+    })
+
+    local Themes = Window:CreateTab("Themes", "palette")
+    local themeNames = {}
+    for n in pairs(Library.Themes) do table.insert(themeNames, n) end
+    table.sort(themeNames)
+    Themes:CreateDropdown({
+        Name = "Theme", Icon = "palette",
+        Options = themeNames, CurrentOption = "Default",
+        Callback = function(t) Window:ModifyTheme(t) end,
+    })
+
+    Window:SetStatus({
+        Label = "Connected",
+        Accent = Color3.fromRGB(52, 211, 153),
+    })
+
+    task.delay(2, function()
+        Library:Notify({
+            Title = "Welcome to Shadow",
+            Type = "info", Image = "sparkles",
+            Content = "Press K to toggle the UI. Drag bar should be below the window.",
+            Duration = 6,
+        })
+    end)
+end)
+
 return Library
