@@ -1,6 +1,6 @@
 --[[
 	╔══════════════════════════════════════════════════════════╗
-	║                    VaenHub v3.6                          ║
+	║                    VaenHub v3.7                          ║
 	║       Final polish + spec fixes — by Dalkoski            ║
 	╚══════════════════════════════════════════════════════════╝
 ]]
@@ -48,7 +48,7 @@ local RADIUS = 8
 --==============================================================
 -- ROOT + FORWARD DECLS
 --==============================================================
-local VaenHub = { Version = "3.6.0", Flags = {}, Windows = {} }
+local VaenHub = { Version = "3.7.0", Flags = {}, Windows = {} }
 local Window = {}
 local Tab = {}
 local Elem = {}
@@ -157,7 +157,7 @@ function VaenHub:CreateWindow(cfg)
 		_protect = cfg.Protect or {},
 		_configSave = cfg.Config or {},
 		_name = cfg.Name or "VaenHub",
-		_version = cfg.Version or "v3.6",
+		_version = cfg.Version or "v3.7",
 		_currentTab = nil,
 		_tabOrder = 0,
 	}, {__index = Window})
@@ -258,56 +258,32 @@ end
 
 function Window:_SelectTab(tab)
 	local isInitial = (self._currentTab == nil)
+	local function tintIcon(elt, color, instant)
+		if not elt then return end
+		if elt:IsA("ImageLabel") then
+			if instant then elt.ImageColor3 = color else tween(elt, 0.15, {ImageColor3 = color}, Enum.EasingStyle.Quad) end
+		else
+			if instant then elt.TextColor3 = color else tween(elt, 0.15, {TextColor3 = color}, Enum.EasingStyle.Quad) end
+		end
+	end
 	for _, t in ipairs(self._tabs) do
 		local sel = (t == tab)
 		t._page.Visible = sel
+		local fg = sel and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(140, 140, 155)
+		local bgT = sel and 0 or 1
 		if sel then
 			t._button.BackgroundColor3 = Color3.fromRGB(38, 32, 64)
-			if isInitial then
-				-- First paint: instant, no race
-				t._button.BackgroundTransparency = 0
-				t._buttonLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-				if t._buttonIcon then
-					if t._buttonIcon:IsA("ImageLabel") then
-						t._buttonIcon.ImageColor3 = Color3.fromRGB(255, 255, 255)
-					else
-						t._buttonIcon.TextColor3 = Color3.fromRGB(255, 255, 255)
-					end
-				end
-			else
-				-- Subsequent switches: smooth tween
-				tween(t._button, 0.15, {BackgroundTransparency = 0}, Enum.EasingStyle.Quad)
-				tween(t._buttonLabel, 0.15, {TextColor3 = Color3.fromRGB(255, 255, 255)}, Enum.EasingStyle.Quad)
-				if t._buttonIcon then
-					if t._buttonIcon:IsA("ImageLabel") then
-						tween(t._buttonIcon, 0.15, {ImageColor3 = Color3.fromRGB(255, 255, 255)}, Enum.EasingStyle.Quad)
-					else
-						tween(t._buttonIcon, 0.15, {TextColor3 = Color3.fromRGB(255, 255, 255)}, Enum.EasingStyle.Quad)
-					end
-				end
-			end
+		end
+		if isInitial then
+			t._button.BackgroundTransparency = bgT
+			t._buttonLabel.TextColor3 = fg
+			tintIcon(t._buttonIcon, fg, true)
+			tintIcon(t._buttonGlyph, fg, true)
 		else
-			if isInitial then
-				t._button.BackgroundTransparency = 1
-				t._buttonLabel.TextColor3 = Color3.fromRGB(140, 140, 155)
-				if t._buttonIcon then
-					if t._buttonIcon:IsA("ImageLabel") then
-						t._buttonIcon.ImageColor3 = Color3.fromRGB(140, 140, 155)
-					else
-						t._buttonIcon.TextColor3 = Color3.fromRGB(140, 140, 155)
-					end
-				end
-			else
-				tween(t._button, 0.15, {BackgroundTransparency = 1}, Enum.EasingStyle.Quad)
-				tween(t._buttonLabel, 0.15, {TextColor3 = Color3.fromRGB(140, 140, 155)}, Enum.EasingStyle.Quad)
-				if t._buttonIcon then
-					if t._buttonIcon:IsA("ImageLabel") then
-						tween(t._buttonIcon, 0.15, {ImageColor3 = Color3.fromRGB(140, 140, 155)}, Enum.EasingStyle.Quad)
-					else
-						tween(t._buttonIcon, 0.15, {TextColor3 = Color3.fromRGB(140, 140, 155)}, Enum.EasingStyle.Quad)
-					end
-				end
-			end
+			tween(t._button, 0.15, {BackgroundTransparency = bgT}, Enum.EasingStyle.Quad)
+			tween(t._buttonLabel, 0.15, {TextColor3 = fg}, Enum.EasingStyle.Quad)
+			tintIcon(t._buttonIcon, fg, false)
+			tintIcon(t._buttonGlyph, fg, false)
 		end
 	end
 	self._currentTab = tab
@@ -666,26 +642,19 @@ function VaenHub:_BuildWindow(win)
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(WINDOW_W, WINDOW_H),
-		BackgroundColor3 = Color3.fromRGB(15, 13, 25),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
 		ZIndex = 1,
 	}, gui)
-	corner(main, 12)
+	corner(main, 8)
 	stroke(main, Color3.fromRGB(255,255,255), 0.9)
 
-	-- Radial glow background (ImageLabel approach per spec)
-	local bgGlow = new("ImageLabel", {
-		Name = "BgGlow",
-		Size = UDim2.new(1, 0, 1, 0),
-		BackgroundTransparency = 1,
-		Image = "rbxassetid://6015886855",
-		ImageColor3 = Color3.fromRGB(60, 45, 110),
-		ImageTransparency = 0.4,
-		ScaleType = Enum.ScaleType.Stretch,
-		ZIndex = 1,
+	-- Single shared 45deg UIGradient
+	new("UIGradient", {
+		Color = ColorSequence.new(Color3.fromRGB(26, 21, 48), Color3.fromRGB(10, 8, 18)),
+		Rotation = 45,
 	}, main)
-	corner(bgGlow, 12)
 
 	win._main = main
 
@@ -709,7 +678,7 @@ function VaenHub:_BuildWindow(win)
 	local topbar = new("Frame", {
 		Name = "Topbar",
 		Size = UDim2.new(1, 0, 0, TOPBAR_H),
-		BackgroundColor3 = THEME.Topbar,
+		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ZIndex = 2,
 	}, main)
@@ -854,7 +823,7 @@ function VaenHub:_BuildWindow(win)
 	end
 
 	-- Order left-to-right: Search, Settings, Min, Close
-	local searchBtn = topImgBtn("Search",  "rbxassetid://9723793096", 1)
+	local searchBtn = topBtn("Search",   "Q", 14, 1)  -- text placeholder per spec fallback
 	local cogBtn    = topBtn("Settings", "⚙", 18, 2)
 	local miniBtn   = topBtn("Mini",     "–", 22, 3)
 	local closeBtn  = topBtn("Close",    "×", 22, 4)
@@ -952,47 +921,49 @@ function VaenHub:_BuildTab(win, t)
 
 	-- Tab icon resolution: LUCIDE asset IDs first (per spec), GLYPHS as fallback
 	local iconLbl
+	-- Tab icon resolution: stacked render — glyph fallback first (always visible),
+	-- ImageLabel on top (renders only if asset loads successfully)
+	local iconLbl
+	local glyphLbl
 	local labelX = 12
 	if t._icon then
 		local iconStr = tostring(t._icon)
-		-- Priority 1: LUCIDE dictionary (per spec asset IDs)
-		if LUCIDE[iconStr] then
-			iconLbl = new("ImageLabel", {
-				AnchorPoint = Vector2.new(0, 0.5),
-				Size = UDim2.fromOffset(16, 16),
-				Position = UDim2.new(0, 12, 0.5, 0),
-				BackgroundTransparency = 1,
-				Image = LUCIDE[iconStr],
-				ImageColor3 = Color3.fromRGB(140, 140, 155),
-			}, btn)
+		local glyph = GLYPHS[iconStr]
+		local assetId = LUCIDE[iconStr]
+		if not assetId and (iconStr:match("^rbxasset") or iconStr:match("^rbxassetid") or iconStr:match("^%d+$")) then
+			assetId = (iconStr:match("^rbxasset") or iconStr:match("^rbxassetid")) and iconStr or ("rbxassetid://" .. iconStr)
+		end
+
+		if glyph or assetId then
+			-- Bottom layer: glyph (visible if image fails)
+			if glyph then
+				glyphLbl = new("TextLabel", {
+					AnchorPoint = Vector2.new(0, 0.5),
+					Size = UDim2.fromOffset(16, 28),
+					Position = UDim2.new(0, 12, 0.5, 0),
+					BackgroundTransparency = 1,
+					Text = glyph,
+					Font = Enum.Font.GothamBold,
+					TextSize = 14,
+					TextColor3 = Color3.fromRGB(140, 140, 155),
+					TextXAlignment = Enum.TextXAlignment.Center,
+					TextYAlignment = Enum.TextYAlignment.Center,
+					ZIndex = 4,
+				}, btn)
+			end
+			-- Top layer: image (only renders pixels if asset loaded)
+			if assetId then
+				iconLbl = new("ImageLabel", {
+					AnchorPoint = Vector2.new(0, 0.5),
+					Size = UDim2.fromOffset(16, 16),
+					Position = UDim2.new(0, 12, 0.5, 0),
+					BackgroundTransparency = 1,
+					Image = assetId,
+					ImageColor3 = Color3.fromRGB(140, 140, 155),
+					ZIndex = 5,
+				}, btn)
+			end
 			labelX = 34
-		-- Priority 2: raw asset path
-		elseif iconStr:match("^rbxasset") or iconStr:match("^rbxassetid") or iconStr:match("^%d+$") then
-			local src = (iconStr:match("^rbxasset") or iconStr:match("^rbxassetid")) and iconStr or ("rbxassetid://" .. iconStr)
-			iconLbl = new("ImageLabel", {
-				AnchorPoint = Vector2.new(0, 0.5),
-				Size = UDim2.fromOffset(16, 16),
-				Position = UDim2.new(0, 12, 0.5, 0),
-				BackgroundTransparency = 1,
-				Image = src,
-				ImageColor3 = Color3.fromRGB(140, 140, 155),
-			}, btn)
-			labelX = 34
-		-- Priority 3: glyph fallback
-		elseif GLYPHS[iconStr] then
-			iconLbl = new("TextLabel", {
-				AnchorPoint = Vector2.new(0, 0.5),
-				Size = UDim2.fromOffset(16, 28),
-				Position = UDim2.new(0, 12, 0.5, 0),
-				BackgroundTransparency = 1,
-				Text = GLYPHS[iconStr],
-				Font = Enum.Font.GothamBold,
-				TextSize = 14,
-				TextColor3 = Color3.fromRGB(140, 140, 155),
-				TextXAlignment = Enum.TextXAlignment.Center,
-				TextYAlignment = Enum.TextYAlignment.Center,
-			}, btn)
-			labelX = 32
 		end
 	end
 
@@ -1019,6 +990,7 @@ function VaenHub:_BuildTab(win, t)
 	t._button = btn
 	t._buttonLabel = lbl
 	t._buttonIcon = iconLbl
+	t._buttonGlyph = glyphLbl
 	t._buttonStroke = btnStroke
 	t._gradient = nil
 
