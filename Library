@@ -364,7 +364,36 @@ local function safeRead(p)
     if ok then return data end
 end
 
+local LIB_SIG = "__ShadowLibGUI_v2"
+
+local function tagGui(gui)
+    pcall(function() gui:SetAttribute(LIB_SIG, true) end)
+end
+
+local function cleanupOldGUIs()
+    local containers = {}
+    if exec.gethui then
+        local ok, h = pcall(exec.gethui)
+        if ok and h then table.insert(containers, h) end
+    end
+    table.insert(containers, CoreGui)
+    pcall(function()
+        local pg = LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui")
+        if pg then table.insert(containers, pg) end
+    end)
+    for _, c in ipairs(containers) do
+        pcall(function()
+            for _, child in ipairs(c:GetChildren()) do
+                if child:IsA("ScreenGui") and child:GetAttribute(LIB_SIG) then
+                    pcall(function() child:Destroy() end)
+                end
+            end
+        end)
+    end
+end
+
 local function safeParent(gui)
+    tagGui(gui)
     if exec.gethui then
         local ok = pcall(function() gui.Parent = exec.gethui() end)
         if ok and gui.Parent then return end
@@ -1240,6 +1269,7 @@ end
 
 function Library:CreateWindow(opts)
     opts = opts or {}
+    cleanupOldGUIs()
     if opts.LoadingScreen ~= false then
         Library:_showLoadingScreen({
             Name = opts.LoadingTitle or opts.Name or "Library",
@@ -1664,15 +1694,23 @@ function Library:CreateWindow(opts)
         Text = "", AutoButtonColor = false,
     }, dragBar)
     self._dragBar = dragBar
-    local BAR_GAP = 18
+    local BAR_GAP = 22
+    local debugPrinted = false
     local function updateBarPos()
         if not window or not window.Parent then return end
         local p = window.AbsolutePosition
         local s = window.AbsoluteSize
-        dragBar.Position = UDim2.fromOffset(
-            math.floor(p.X + s.X / 2),
-            math.floor(p.Y + s.Y + BAR_GAP)
-        )
+        local targetX = math.floor(p.X + s.X / 2)
+        local targetY = math.floor(p.Y + s.Y + BAR_GAP)
+        dragBar.Position = UDim2.fromOffset(targetX, targetY)
+        if not debugPrinted and s.X > 100 and s.Y > 100 then
+            debugPrinted = true
+            print(string.format(
+                "[Library] DragBar pos=(%d,%d)  window bottom=(%d,%d)  size=(%d,%d)  gap=%d",
+                targetX, targetY, math.floor(p.X), math.floor(p.Y + s.Y),
+                math.floor(s.X), math.floor(s.Y), BAR_GAP
+            ))
+        end
     end
     window:GetPropertyChangedSignal("AbsolutePosition"):Connect(updateBarPos)
     window:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateBarPos)
@@ -1684,7 +1722,16 @@ function Library:CreateWindow(opts)
         end
         updateBarPos()
     end)
+    local barRSConn
+    barRSConn = RunService.RenderStepped:Connect(function()
+        if not window or not window.Parent or self._destroyed then
+            if barRSConn then barRSConn:Disconnect(); barRSConn = nil end
+            return
+        end
+        updateBarPos()
+    end)
     self._barConn = barConn
+    self._barRSConn = barRSConn
     updateBarPos()
     makeDraggable(window, dragHit, function() return self._hidden end)
     dragHit.MouseEnter:Connect(function()
