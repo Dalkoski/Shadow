@@ -20,9 +20,9 @@ local LIBRARY_CONFIG = {
         Rotation = 45,
     },
     NotifDefaultDuration = 4,
-    HideAnimDuration = 0.4,
-    HideAnimScale = 0.86,
-    HideAnimDrop = 24,
+    HideAnimDuration = 0.55,
+    HideAnimScale = 0.65,
+    HideAnimDrop = 60,
     AccentColor = nil,
     ResizeMinWidth = 480,
     ResizeMinHeight = 320,
@@ -738,55 +738,48 @@ function Library:Notify(opts)
         Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundColor3 = COLOR.BgDeep, BorderSizePixel = 0, ClipsDescendants = true,
     }, holder)
-    corner(card, 14)
-    stroke(card, Color3.fromRGB(255,255,255), wA(0.1), 1)
-    addGlow(card, 14)
-    pad(card, 16, 18, 16, 18)
-
-    local accentBar = new("Frame", {
-        Position = UDim2.fromOffset(0, 6), Size = UDim2.new(0, 3, 1, -12),
-        BackgroundColor3 = accent, BorderSizePixel = 0, ZIndex = 2,
-    }, card)
-    corner(accentBar, 2)
+    corner(card, 10)
+    stroke(card, Color3.fromRGB(255,255,255), wA(0.07), 1)
+    pad(card, 12, 14, 12, 14)
 
     local hasIcon = opts.Image and opts.Image ~= ""
-    local contentX = hasIcon and 56 or 14
+    local contentX = hasIcon and 46 or 0
     if hasIcon then
         local iconBox = new("Frame", {
-            Position = UDim2.fromOffset(14, 2), Size = UDim2.fromOffset(38, 38),
-            BackgroundColor3 = Color3.fromRGB(255,255,255), BackgroundTransparency = wA(0.07),
+            Position = UDim2.fromOffset(0, 2), Size = UDim2.fromOffset(34, 34),
+            BackgroundColor3 = accent, BackgroundTransparency = wA(0.18),
             BorderSizePixel = 0, ZIndex = 2,
         }, card)
-        corner(iconBox, 9)
-        stroke(iconBox, Color3.fromRGB(255,255,255), wA(0.1), 1)
-        applyIcon(iconBox, opts.Image, 22, 0.92)
+        corner(iconBox, 8)
+        stroke(iconBox, accent, wA(0.3), 1)
+        applyIcon(iconBox, opts.Image, 20, 0.95)
     end
 
     local titleLbl = new("TextLabel", {
         Position = UDim2.fromOffset(contentX, 0),
-        Size = UDim2.new(1, -contentX - 8, 0, 18),
+        Size = UDim2.new(1, -contentX, 0, 16),
         BackgroundTransparency = 1, Text = opts.Title or "Notification",
-        Font = Enum.Font.GothamBold, TextSize = 15, TextColor3 = COLOR.TextPrimary,
+        Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = COLOR.TextPrimary,
         TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, ZIndex = 2,
     }, card)
     local descLbl = new("TextLabel", {
-        Position = UDim2.fromOffset(contentX, 22),
-        Size = UDim2.new(1, -contentX - 8, 0, 0),
+        Position = UDim2.fromOffset(contentX, 19),
+        Size = UDim2.new(1, -contentX, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1,
         Text = opts.Content or "",
-        Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = Color3.fromRGB(255,255,255),
-        TextTransparency = wA(0.6), TextXAlignment = Enum.TextXAlignment.Left,
+        Font = Enum.Font.Gotham, TextSize = 11, TextColor3 = COLOR.TextPrimary,
+        TextTransparency = wA(0.55), TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, ZIndex = 2,
     }, card)
 
     card.Position = UDim2.new(1, 80, 0, 0)
-    tween(card, 0.45, { Position = UDim2.new(0, 0, 0, 0) }, Enum.EasingStyle.Quint)
+    tween(card, 0.4, { Position = UDim2.new(0, 0, 0, 0) }, Enum.EasingStyle.Quint)
     local duration = opts.Duration or Library._notifDuration or LIBRARY_CONFIG.NotifDefaultDuration
     task.delay(duration, function()
         if not card.Parent then return end
-        tween(titleLbl, 0.25, { TextTransparency = 1 })
-        tween(descLbl, 0.25, { TextTransparency = 1 })
-        local tw = tween(card, 0.4, { Position = UDim2.new(1, 80, 0, 0) }, Enum.EasingStyle.Quint)
+        tween(titleLbl, 0.2, { TextTransparency = 1 })
+        tween(descLbl, 0.2, { TextTransparency = 1 })
+        local tw = tween(card, 0.35, { Position = UDim2.new(1, 80, 0, 0) }, Enum.EasingStyle.Quint)
         tw.Completed:Wait(); card:Destroy()
     end)
 end
@@ -1193,6 +1186,7 @@ function Library:CreateWindow(opts)
     self.Window = window
     self._glow = glow
     self._shadow = shadow
+    self:_updateGlowForTheme()
 
     window.Size = UDim2.fromOffset(WW * 0.9, WH * 0.9)
     tween(window, 0.45, { Size = self._normalSize }, Enum.EasingStyle.Back)
@@ -1207,11 +1201,11 @@ function Library:CreateWindow(opts)
         Size = UDim2.new(1, 0, 0, 1), BackgroundColor3 = Color3.fromRGB(255,255,255),
         BackgroundTransparency = wA(0.05), BorderSizePixel = 0, ZIndex = 2,
     }, titlebar)
-
-    local dragArea = new("Frame", {
-        Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, ZIndex = 2,
+    local dragHandle = new("TextButton", {
+        Size = UDim2.new(1, -140, 1, 0),
+        BackgroundTransparency = 1, Text = "", AutoButtonColor = false, ZIndex = 4,
     }, titlebar)
-    makeDraggable(window, dragArea, function() return self._hidden end)
+    makeDraggable(window, dragHandle, function() return self._hidden end)
 
     local titleLeft = new("Frame", {
         AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 14, 0.5, 0),
@@ -1556,7 +1550,9 @@ function Window:Hide()
     tween(w, dur, {
         Size = UDim2.fromOffset(curSize.X.Offset * scale, curSize.Y.Offset * scale),
         Position = self._restorePos + UDim2.fromOffset(0, drop),
-    }, Enum.EasingStyle.Quint)
+    }, Enum.EasingStyle.Sine, Enum.EasingDirection.In)
+    if self._glow then tween(self._glow, dur * 0.7, { BackgroundTransparency = 1 }) end
+    if self._shadow then tween(self._shadow, dur * 0.7, { BackgroundTransparency = 1 }) end
     task.delay(dur + 0.02, function()
         if self._hidden and w then w.Visible = false end
     end)
@@ -1579,9 +1575,11 @@ function Window:Unhide()
     w.Visible = true
     w.Size = UDim2.fromOffset(target.X.Offset * scale, target.Y.Offset * scale)
     w.Position = restorePos + UDim2.fromOffset(0, drop)
-    tween(w, 0.45, {
+    tween(w, 0.55, {
         Size = target, Position = restorePos,
-    }, Enum.EasingStyle.Quint)
+    }, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+    if self._glow then tween(self._glow, 0.4, { BackgroundTransparency = 0 }) end
+    if self._shadow then tween(self._shadow, 0.4, { BackgroundTransparency = 0 }) end
     self._restorePos = nil
     if self._dragBar then
         local isMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
@@ -1613,6 +1611,18 @@ function Window:SetSectionTitle(text)
     if self.SectionTitle then self.SectionTitle.Text = text end
 end
 
+local function isLightTheme()
+    local bg = COLOR.BgDeep
+    return (bg.R + bg.G + bg.B) / 3 > 0.5
+end
+
+function Window:_updateGlowForTheme()
+    if not self._glow or not self._shadow then return end
+    local light = isLightTheme()
+    self._glow.Visible = not light
+    self._shadow.Visible = not light
+end
+
 function Window:ModifyTheme(name)
     local newTheme
     if type(name) == "string" and THEMES[name] then
@@ -1622,10 +1632,19 @@ function Window:ModifyTheme(name)
     else return end
     for k, v in pairs(newTheme) do COLOR[k] = v end
     self.Window.BackgroundColor3 = COLOR.BgDeep
+    self:_updateGlowForTheme()
+    local light = isLightTheme()
     for _, d in ipairs(self.Gui:GetDescendants()) do
         if d:IsA("TextLabel") or d:IsA("TextBox") then
-            if d.TextColor3 == Color3.fromRGB(255,255,255) or d.TextColor3 == Color3.fromRGB(0,0,0) then
+            if d.TextColor3 == Color3.fromRGB(255,255,255) or d.TextColor3 == Color3.fromRGB(0,0,0)
+                or d.TextColor3 == Color3.fromRGB(20,20,22) then
                 d.TextColor3 = COLOR.TextPrimary
+            end
+        elseif d:IsA("UIStroke") then
+            if light then
+                d.Color = Color3.fromRGB(0, 0, 0)
+            else
+                d.Color = Color3.fromRGB(255, 255, 255)
             end
         end
     end
@@ -1743,33 +1762,21 @@ function Window:_createSettingsTab()
     tab.Panel = panel
     self._settingsTab = tab
 
-    tab:CreateSection("Configuration")
-    tab:CreateButton({
-        Name = "Save Config Now",
-        Icon = "save",
-        Callback = function()
-            self:SaveConfig()
-            Library:Notify({ Title = "Settings", Content = "Configuration saved.", Duration = 2 })
-        end,
+    tab:CreateSection("Notifications")
+    tab:CreateToggle({
+        Name = "Enable Notifications", Icon = "bell",
+        CurrentValue = Library._notifEnabled ~= false,
+        Flag = "_ui_notif_enable",
+        Callback = function(v) Library._notifEnabled = v end,
     })
-    tab:CreateButton({
-        Name = "Reload Config",
-        Icon = "refresh-cw",
-        Callback = function()
-            self:LoadConfig()
-            Library:Notify({ Title = "Settings", Content = "Configuration reloaded.", Duration = 2 })
-        end,
+    tab:CreateSlider({
+        Name = "Duration", Icon = "clock",
+        Range = {1, 10}, Increment = 1, Suffix = "s",
+        CurrentValue = Library._notifDuration or LIBRARY_CONFIG.NotifDefaultDuration,
+        Flag = "_ui_notif_duration",
+        Callback = function(v) Library._notifDuration = v end,
     })
-    tab:CreateButton({
-        Name = "Delete Config",
-        Icon = "trash-2",
-        Callback = function()
-            if self.Config.Enabled and exec.delfile then
-                pcall(exec.delfile, self.Config.FolderName .. "/Configs/" .. self.Config.FileName .. ".json")
-                Library:Notify({ Title = "Settings", Content = "Config deleted.", Duration = 2 })
-            end
-        end,
-    })
+
     tab:CreateSection("Theme")
     local themeNames = {}
     for n in pairs(THEMES) do table.insert(themeNames, n) end
@@ -1779,8 +1786,10 @@ function Window:_createSettingsTab()
         Icon = "palette",
         Options = themeNames,
         CurrentOption = "Default",
+        Flag = "_ui_theme",
         Callback = function(opt) self:ModifyTheme(opt) end,
     })
+
     tab:CreateSection("Window")
     tab:CreateKeybind({
         Name = "Toggle UI",
@@ -1802,6 +1811,129 @@ function Window:_createSettingsTab()
         Icon = "log-out",
         Callback = function() self:Destroy() end,
     })
+
+    if self.Config.Enabled then
+        local cfg = self.Config
+        local configsPath = cfg.FolderName .. "/Configs"
+        local autoloadFile = cfg.FolderName .. "/autoload.txt"
+
+        local function listConfigs()
+            local list = {}
+            if exec.isfolder and exec.isfolder(configsPath) and exec.listfiles then
+                local ok, files = pcall(exec.listfiles, configsPath)
+                if ok and files then
+                    for _, f in ipairs(files) do
+                        local n = string.match(f, "([^/\\]+)%.json$")
+                        if n then table.insert(list, n) end
+                    end
+                end
+            end
+            table.sort(list)
+            return list
+        end
+        local function readAutoload()
+            local s = safeRead(autoloadFile)
+            if s and s ~= "" then return s end
+            return nil
+        end
+
+        tab:CreateSection("Configuration")
+        local typedName = ""
+        tab:CreateInput({
+            Name = "Config name", Icon = "file-text",
+            PlaceholderText = "MyConfig", CurrentValue = "",
+            Callback = function(v) typedName = v end,
+        })
+        local list = listConfigs()
+        local selected = list[1] or "---"
+        local dropdown
+        tab:CreateButton({
+            Name = "Create config", Icon = "plus",
+            Callback = function()
+                if typedName == "" then
+                    Library:Notify({Title = "Empty", Type = "warning", Image = "info", Content = "Enter a name first.", Duration = 2})
+                    return
+                end
+                local orig = cfg.FileName
+                cfg.FileName = typedName
+                self:SaveConfig()
+                cfg.FileName = orig
+                Library:Notify({Title = "Created", Type = "success", Image = "check", Content = typedName, Duration = 2})
+                list = listConfigs()
+                if dropdown then dropdown:Refresh(#list > 0 and list or {"---"}) end
+            end,
+        })
+        tab:CreateDivider()
+        dropdown = tab:CreateDropdown({
+            Name = "Config list", Icon = "list",
+            Options = #list > 0 and list or {"---"},
+            CurrentOption = list[1] or "---",
+            Callback = function(v) selected = v end,
+        })
+        tab:CreateButton({
+            Name = "Load config", Icon = "download",
+            Callback = function()
+                if selected == "---" or selected == "" then return end
+                cfg.FileName = selected
+                self:LoadConfig()
+                Library:Notify({Title = "Loaded", Type = "success", Image = "check", Content = selected, Duration = 2})
+            end,
+        })
+        tab:CreateButton({
+            Name = "Save current as", Icon = "save",
+            Callback = function()
+                if selected == "---" or selected == "" then return end
+                local orig = cfg.FileName
+                cfg.FileName = selected
+                self:SaveConfig()
+                cfg.FileName = orig
+                Library:Notify({Title = "Saved", Type = "success", Image = "check", Content = selected, Duration = 2})
+            end,
+        })
+        tab:CreateButton({
+            Name = "Delete config", Icon = "trash-2",
+            ConfirmMessage = "Delete the selected config?", ConfirmDanger = true, ConfirmYes = "Delete",
+            Callback = function()
+                if selected == "---" or selected == "" then return end
+                if exec.delfile then pcall(exec.delfile, configsPath .. "/" .. selected .. ".json") end
+                Library:Notify({Title = "Deleted", Type = "error", Image = "trash-2", Content = selected, Duration = 2})
+                list = listConfigs()
+                if dropdown then dropdown:Refresh(#list > 0 and list or {"---"}) end
+                selected = list[1] or "---"
+            end,
+        })
+        tab:CreateButton({
+            Name = "Refresh list", Icon = "refresh-cw",
+            Callback = function()
+                list = listConfigs()
+                if dropdown then dropdown:Refresh(#list > 0 and list or {"---"}) end
+            end,
+        })
+        local autoloadLabel
+        local function renderAutoload()
+            local cur = readAutoload()
+            local txt = "Autoload: " .. (cur or "none")
+            if autoloadLabel then autoloadLabel:Set(txt) end
+        end
+        tab:CreateButton({
+            Name = "Set as autoload", Icon = "pin",
+            Callback = function()
+                if selected == "---" or selected == "" then return end
+                safeWrite(autoloadFile, selected)
+                renderAutoload()
+                Library:Notify({Title = "Autoload set", Type = "success", Image = "check", Content = selected, Duration = 2})
+            end,
+        })
+        tab:CreateButton({
+            Name = "Reset autoload", Icon = "x",
+            Callback = function()
+                if exec.delfile then pcall(exec.delfile, autoloadFile) end
+                renderAutoload()
+                Library:Notify({Title = "Autoload reset", Type = "info", Image = "info", Duration = 2})
+            end,
+        })
+        autoloadLabel = tab:CreateLabel("Autoload: " .. (readAutoload() or "none"))
+    end
 end
 
 function Window:_openSettings()
@@ -1910,149 +2042,7 @@ function Window:SetActiveTab(tab)
 end
 
 function Window:CreateUITab(opts)
-    opts = opts or {}
-    local tab = self:CreateTab(opts.Name or "UI Settings", opts.Icon or "settings-2")
-
-    tab:CreateSection(opts.NotificationsTitle or "Notifications")
-    tab:CreateToggle({
-        Name = "Enable Notifications", Icon = "bell",
-        CurrentValue = Library._notifEnabled ~= false,
-        Flag = "_ui_notif_enable",
-        Callback = function(v) Library._notifEnabled = v end,
-    })
-    tab:CreateSlider({
-        Name = "Duration", Icon = "clock",
-        Range = {1, 10}, Increment = 1, Suffix = "s",
-        CurrentValue = Library._notifDuration or LIBRARY_CONFIG.NotifDefaultDuration,
-        Flag = "_ui_notif_duration",
-        Callback = function(v) Library._notifDuration = v end,
-    })
-
-    if self.Config.Enabled then
-        local cfg = self.Config
-        local configsPath = cfg.FolderName .. "/Configs"
-        local autoloadFile = cfg.FolderName .. "/autoload.txt"
-
-        local function listConfigs()
-            local list = {}
-            if exec.isfolder and exec.isfolder(configsPath) and listfiles then
-                local ok, files = pcall(listfiles, configsPath)
-                if ok and files then
-                    for _, f in ipairs(files) do
-                        local n = string.match(f, "([^/\\]+)%.json$")
-                        if n then table.insert(list, n) end
-                    end
-                end
-            end
-            table.sort(list)
-            return list
-        end
-
-        local function readAutoload()
-            local s = safeRead(autoloadFile)
-            if s and s ~= "" then return s end
-            return nil
-        end
-
-        tab:CreateSection(opts.ConfigurationTitle or "Configuration")
-        local typedName = ""
-        local nameInput = tab:CreateInput({
-            Name = "Config name", Icon = "file-text",
-            PlaceholderText = "MyConfig", CurrentValue = "",
-            Callback = function(v) typedName = v end,
-        })
-        local list = listConfigs()
-        local selected = list[1] or "---"
-        local dropdown
-        tab:CreateButton({
-            Name = "Create config", Icon = "plus",
-            Callback = function()
-                if typedName == "" then
-                    Library:Notify({Title = "Empty", Type = "warning", Image = "info", Content = "Enter a name first.", Duration = 2})
-                    return
-                end
-                local orig = cfg.FileName
-                cfg.FileName = typedName
-                self:SaveConfig()
-                cfg.FileName = orig
-                Library:Notify({Title = "Created", Type = "success", Image = "check", Content = typedName, Duration = 2})
-                list = listConfigs()
-                if dropdown then dropdown:Refresh(#list > 0 and list or {"---"}) end
-            end,
-        })
-        tab:CreateDivider()
-        dropdown = tab:CreateDropdown({
-            Name = "Config list", Icon = "list",
-            Options = #list > 0 and list or {"---"},
-            CurrentOption = list[1] or "---",
-            Callback = function(v) selected = v end,
-        })
-        tab:CreateButton({
-            Name = "Load config", Icon = "download",
-            Callback = function()
-                if selected == "---" or selected == "" then return end
-                local orig = cfg.FileName
-                cfg.FileName = selected
-                self:LoadConfig()
-                Library:Notify({Title = "Loaded", Type = "success", Image = "check", Content = selected, Duration = 2})
-            end,
-        })
-        tab:CreateButton({
-            Name = "Overwrite config", Icon = "save",
-            Callback = function()
-                if selected == "---" or selected == "" then return end
-                local orig = cfg.FileName
-                cfg.FileName = selected
-                self:SaveConfig()
-                cfg.FileName = orig
-                Library:Notify({Title = "Overwritten", Type = "success", Image = "check", Content = selected, Duration = 2})
-            end,
-        })
-        tab:CreateButton({
-            Name = "Delete config", Icon = "trash-2",
-            Callback = function()
-                if selected == "---" or selected == "" then return end
-                if exec.delfile then pcall(exec.delfile, configsPath .. "/" .. selected .. ".json") end
-                Library:Notify({Title = "Deleted", Type = "error", Image = "trash-2", Content = selected, Duration = 2})
-                list = listConfigs()
-                if dropdown then dropdown:Refresh(#list > 0 and list or {"---"}) end
-                selected = list[1] or "---"
-            end,
-        })
-        tab:CreateButton({
-            Name = "Refresh list", Icon = "refresh-cw",
-            Callback = function()
-                list = listConfigs()
-                if dropdown then dropdown:Refresh(#list > 0 and list or {"---"}) end
-            end,
-        })
-        local autoloadLabel
-        local function renderAutoload()
-            local cur = readAutoload()
-            local txt = "Current autoload config: " .. (cur or "none")
-            if autoloadLabel then autoloadLabel:Set(txt) end
-        end
-        tab:CreateButton({
-            Name = "Set as autoload", Icon = "pin",
-            Callback = function()
-                if selected == "---" or selected == "" then return end
-                safeWrite(autoloadFile, selected)
-                renderAutoload()
-                Library:Notify({Title = "Autoload set", Type = "success", Image = "check", Content = selected, Duration = 2})
-            end,
-        })
-        tab:CreateButton({
-            Name = "Reset autoload", Icon = "x",
-            Callback = function()
-                if exec.delfile then pcall(exec.delfile, autoloadFile) end
-                renderAutoload()
-                Library:Notify({Title = "Autoload reset", Type = "info", Image = "info", Duration = 2})
-            end,
-        })
-        autoloadLabel = tab:CreateLabel("Current autoload config: " .. (readAutoload() or "none"))
-    end
-
-    return tab
+    return nil
 end
 
 function Window:CreateHomeTab(opts)
@@ -2759,8 +2749,9 @@ function Tab:CreateInput(opts)
     makeCardLabels(card, opts.Name or "Input", opts.Description)
     local frame = new("Frame", {
         AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -13, 0.5, 0),
-        Size = UDim2.fromOffset(140, 24), BackgroundColor3 = Color3.fromRGB(255,255,255),
+        Size = UDim2.fromOffset(160, 24), BackgroundColor3 = Color3.fromRGB(255,255,255),
         BackgroundTransparency = wA(0.04), BorderSizePixel = 0, ZIndex = 3,
+        ClipsDescendants = true,
     }, card)
     corner(frame, 6)
     local fStroke = stroke(frame, Color3.fromRGB(255,255,255), wA(0.08), 1)
@@ -2770,7 +2761,8 @@ function Tab:CreateInput(opts)
         PlaceholderText = opts.PlaceholderText or "",
         PlaceholderColor3 = Color3.fromRGB(140,140,140), Font = Enum.Font.Gotham,
         TextSize = 11, TextColor3 = COLOR.TextPrimary,
-        TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false, ZIndex = 4,
+        TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false,
+        TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 4,
     }, frame)
     box.Focused:Connect(function() tween(fStroke, 0.15, { Transparency = wA(0.2) }) end)
     box.FocusLost:Connect(function()
@@ -3040,11 +3032,19 @@ function Tab:CreateColorPicker(opts)
     end
     repaint()
     local open = false
-    swatch.MouseButton1Click:Connect(function()
+    local function toggleOpen()
         open = not open
         panel.Visible = open
         tween(card, 0.25, { Size = UDim2.new(1, -2, 0, open and 168 or 50) }, Enum.EasingStyle.Quint)
-    end)
+    end
+    swatch.MouseButton1Click:Connect(toggleOpen)
+    local cardHit = new("TextButton", {
+        Position = UDim2.fromOffset(0, 0),
+        Size = UDim2.new(1, -60, 0, 50),
+        BackgroundTransparency = 1, Text = "", AutoButtonColor = false, ZIndex = 4,
+    }, card)
+    cardHit.MouseButton1Click:Connect(toggleOpen)
+
     local function svHit(p)
         local pos, size = sv.AbsolutePosition, sv.AbsoluteSize
         s = math.clamp((p.X - pos.X) / size.X, 0, 1)
@@ -3059,21 +3059,28 @@ function Tab:CreateColorPicker(opts)
         win.Flags[flag] = c; pcall(cb, c)
     end
     local function bindDrag(zone, fn)
+        local dragging = false
         local b = new("TextButton", { Size = UDim2.fromScale(1,1), BackgroundTransparency = 1,
             Text = "", AutoButtonColor = false, ZIndex = 9 }, zone)
         b.InputBegan:Connect(function(input)
             if input.UserInputType ~= Enum.UserInputType.MouseButton1
                 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+            dragging = true
             fn(input.Position)
-            local rs
-            rs = RunService.RenderStepped:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    rs:Disconnect()
-                    win:SaveConfig()
-                    return
-                end
+        end)
+        b.InputEnded:Connect(function(input)
+            if input.UserInputType ~= Enum.UserInputType.MouseButton1
+                and input.UserInputType ~= Enum.UserInputType.Touch then return end
+            if not dragging then return end
+            dragging = false
+            win:SaveConfig()
+        end)
+        UserInputService.InputChanged:Connect(function(input)
+            if not dragging then return end
+            if input.UserInputType == Enum.UserInputType.MouseMovement
+                or input.UserInputType == Enum.UserInputType.Touch then
                 fn(input.Position)
-            end)
+            end
         end)
     end
     bindDrag(sv, svHit)
