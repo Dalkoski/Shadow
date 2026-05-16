@@ -1457,23 +1457,28 @@ function Library:CreateWindow(opts)
         TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 2,
     }, footer)
     self._footerText = footerText
-    local function setFooterText()
-        local left = opts.Name or "Library"
-        local right = opts.Discord or opts.FooterRight or ""
-        if right ~= "" then
+    self._footerLeft = opts.Name or "Library"
+    self._footerRight = opts.Discord or opts.FooterRight or opts.Footer or ""
+    self._footerRightExplicit = (opts.Discord or opts.FooterRight or opts.Footer) ~= nil
+    local function renderFooterText()
+        local left = self._footerLeft or ""
+        local right = self._footerRight or ""
+        if left ~= "" and right ~= "" then
             footerText.Text = left .. "  |  " .. right
         else
-            footerText.Text = left
+            footerText.Text = left ~= "" and left or right
         end
     end
-    setFooterText()
-    if not opts.Discord and not opts.FooterRight then
+    self._renderFooterText = renderFooterText
+    renderFooterText()
+    if not self._footerRightExplicit then
         task.spawn(function()
             local ok, info = pcall(function()
                 return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
             end)
-            if ok and info and info.Name and footerText.Parent then
-                footerText.Text = info.Name
+            if ok and info and info.Name and footerText.Parent and not self._footerRightExplicit then
+                self._footerRight = info.Name
+                renderFooterText()
             end
         end)
     end
@@ -1843,6 +1848,18 @@ end
 
 function Window:SetSectionTitle(text)
     if self.SectionTitle then self.SectionTitle.Text = text end
+end
+
+function Window:SetFooter(right, left)
+    if not self._footerText then return end
+    if right ~= nil then
+        self._footerRight = tostring(right)
+        self._footerRightExplicit = true
+    end
+    if left ~= nil then
+        self._footerLeft = tostring(left)
+    end
+    if self._renderFooterText then self._renderFooterText() end
 end
 
 function Window:SetLogo(value)
@@ -3510,36 +3527,5 @@ UserInputService.InputBegan:Connect(function(input, processed)
     Library:SetVisibility(not anyVisible)
 end)
 
--- ============================================================
--- AUTO-OPEN: bare Shadow window on load (game-agnostic).
--- Settings / Search / Minimize / Close / Drag bar are built into CreateWindow.
--- Home tab shows the Executor label. Status pill shows "Connected".
--- Add your own tabs / toggles after loadstring returns.
--- ============================================================
-task.spawn(function()
-    local Window = Library:CreateWindow({
-        Name = "Shadow",
-        Subtitle = "v" .. Library.Version,
-        LogoText = "S",
-        ToggleUIKeybind = "K",
-        Theme = "Default",
-        LoadingScreen = true,
-        LoadingDuration = 1.4,
-        KeySystem = false,
-        ConfigurationSaving = {
-            Enabled = true,
-            FolderName = "Shadow",
-            FileName = "Default",
-        },
-    })
-    if not Window then return end
-
-    Window:CreateHomeTab({})
-
-    Window:SetStatus({
-        Label = "Connected",
-        Accent = Color3.fromRGB(52, 211, 153),
-    })
-end)
 
 return Library
