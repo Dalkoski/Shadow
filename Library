@@ -20,9 +20,9 @@ local LIBRARY_CONFIG = {
         Rotation = 45,
     },
     NotifDefaultDuration = 4,
-    HideAnimDuration = 0.55,
-    HideAnimScale = 0.65,
-    HideAnimDrop = 60,
+    HideAnimDuration = 0.32,
+    HideAnimScale = 0.82,
+    HideAnimDrop = 30,
     AccentColor = nil,
     ResizeMinWidth = 480,
     ResizeMinHeight = 320,
@@ -738,36 +738,53 @@ function Library:Notify(opts)
         Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundColor3 = COLOR.BgDeep, BorderSizePixel = 0, ClipsDescendants = true,
     }, holder)
-    corner(card, 10)
-    stroke(card, Color3.fromRGB(255,255,255), wA(0.07), 1)
-    pad(card, 12, 14, 12, 14)
+    corner(card, 12)
+    stroke(card, Color3.fromRGB(255,255,255), wA(0.08), 1)
+    pad(card, 14, 16, 14, 16)
+
+    local glow = new("Frame", {
+        Size = UDim2.fromScale(1, 1), BackgroundColor3 = accent,
+        BackgroundTransparency = 0, BorderSizePixel = 0, ZIndex = 1,
+    }, card)
+    corner(glow, 12)
+    new("UIGradient", {
+        Color = ColorSequence.new(accent),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.86),
+            NumberSequenceKeypoint.new(0.5, 0.96),
+            NumberSequenceKeypoint.new(1, 1),
+        }),
+        Rotation = 45,
+    }, glow)
 
     local hasIcon = opts.Image and opts.Image ~= ""
-    local contentX = hasIcon and 46 or 0
+    local contentX = hasIcon and 50 or 4
     if hasIcon then
         local iconBox = new("Frame", {
-            Position = UDim2.fromOffset(0, 2), Size = UDim2.fromOffset(34, 34),
-            BackgroundColor3 = accent, BackgroundTransparency = wA(0.18),
+            AnchorPoint = Vector2.new(0, 0.5),
+            Position = UDim2.new(0, 0, 0.5, 0),
+            Size = UDim2.fromOffset(38, 38),
+            BackgroundColor3 = accent, BackgroundTransparency = wA(0.15),
             BorderSizePixel = 0, ZIndex = 2,
         }, card)
-        corner(iconBox, 8)
-        stroke(iconBox, accent, wA(0.3), 1)
-        applyIcon(iconBox, opts.Image, 20, 0.95)
+        corner(iconBox, 9)
+        stroke(iconBox, accent, wA(0.35), 1)
+        applyIcon(iconBox, opts.Image, 22, 0.95)
     end
 
     local titleLbl = new("TextLabel", {
         Position = UDim2.fromOffset(contentX, 0),
-        Size = UDim2.new(1, -contentX, 0, 16),
+        Size = UDim2.new(1, -contentX, 0, 18),
         BackgroundTransparency = 1, Text = opts.Title or "Notification",
-        Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = COLOR.TextPrimary,
+        Font = Enum.Font.GothamBold, TextSize = 15, TextColor3 = COLOR.TextPrimary,
         TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, ZIndex = 2,
     }, card)
     local descLbl = new("TextLabel", {
-        Position = UDim2.fromOffset(contentX, 19),
+        Position = UDim2.fromOffset(contentX, 22),
         Size = UDim2.new(1, -contentX, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1,
         Text = opts.Content or "",
-        Font = Enum.Font.Gotham, TextSize = 11, TextColor3 = COLOR.TextPrimary,
+        Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = COLOR.TextPrimary,
         TextTransparency = wA(0.55), TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, ZIndex = 2,
     }, card)
@@ -1285,43 +1302,13 @@ function Library:CreateWindow(opts)
         BorderSizePixel = 0, ZIndex = 2,
     }, footer)
 
-    local fAvatarBox = new("Frame", {
-        AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0),
-        Size = UDim2.fromOffset(16, 16), BackgroundColor3 = Color3.fromRGB(42,42,46),
-        BorderSizePixel = 0, ZIndex = 3,
-    }, footer)
-    corner(fAvatarBox, 8)
-    local fAvatar = new("ImageLabel", {
-        Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Image = "",
-        ImageTransparency = 1, ZIndex = 3,
-    }, fAvatarBox)
-    corner(fAvatar, 8)
-    local fNameLbl = new("TextLabel", {
-        AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 32, 0.5, 0),
-        Size = UDim2.fromOffset(120, 12), BackgroundTransparency = 1,
-        Text = LocalPlayer.DisplayName or LocalPlayer.Name or "Player",
-        Font = Enum.Font.GothamMedium, TextSize = 10, TextColor3 = Color3.fromRGB(255,255,255),
-        TextTransparency = wA(0.55), TextXAlignment = Enum.TextXAlignment.Left,
-        TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 3,
-    }, footer)
-    task.spawn(function()
-        local ok, content = pcall(function()
-            return Players:GetUserThumbnailAsync(LocalPlayer.UserId,
-                Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size60x60)
-        end)
-        if ok and content and fAvatar.Parent then
-            fAvatar.Image = content
-            tween(fAvatar, 0.4, { ImageTransparency = 0 })
-        end
-    end)
-
     local footerText = new("TextLabel", {
-        AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.new(1, -260, 1, -4), BackgroundTransparency = 1,
+        AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -36, 0.5, 0),
+        Size = UDim2.new(1, -SBW - 60, 1, -4), BackgroundTransparency = 1,
         Text = opts.Name or "Library",
         Font = Enum.Font.GothamMedium, TextSize = 10, TextColor3 = Color3.fromRGB(255,255,255),
         TextTransparency = wA(0.4),
-        TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Center,
+        TextXAlignment = Enum.TextXAlignment.Right, TextYAlignment = Enum.TextYAlignment.Center,
         TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 2,
     }, footer)
     self._footerText = footerText
@@ -1416,38 +1403,33 @@ function Library:CreateWindow(opts)
     }, sidebar)
     local tabList = new("Frame", {
         Name = "TabList", Position = UDim2.fromOffset(10, 12),
-        Size = UDim2.new(1, -20, 1, -72), BackgroundTransparency = 1, ZIndex = 2,
+        Size = UDim2.new(1, -20, 1, -64), BackgroundTransparency = 1, ZIndex = 2,
     }, sidebar)
     listV(tabList, 3)
     self.TabList = tabList
 
     local userInfo = new("Frame", {
         Name = "UserInfo", AnchorPoint = Vector2.new(0, 1),
-        Position = UDim2.new(0, 10, 1, -12), Size = UDim2.new(1, -20, 0, 40),
-        BackgroundTransparency = 1, ZIndex = 3,
-    }, sidebar)
-    new("Frame", {
-        Position = UDim2.new(0, 0, 0, -10), Size = UDim2.new(1, 0, 0, 1),
-        BackgroundColor3 = Color3.fromRGB(255,255,255), BackgroundTransparency = wA(0.05),
-        BorderSizePixel = 0, ZIndex = 3,
-    }, userInfo)
+        Position = UDim2.new(0, 10, 1, -6), Size = UDim2.fromOffset(SBW - 20, 44),
+        BackgroundTransparency = 1, ZIndex = 6,
+    }, window)
     local avatarBox = new("Frame", {
         AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0),
-        Size = UDim2.fromOffset(30, 30), BackgroundColor3 = Color3.fromRGB(42,42,46),
-        BorderSizePixel = 0, ZIndex = 3, ClipsDescendants = true,
+        Size = UDim2.fromOffset(34, 34), BackgroundColor3 = COLOR.BgDeep,
+        BorderSizePixel = 0, ZIndex = 6, ClipsDescendants = true,
     }, userInfo)
-    corner(avatarBox, 15)
-    stroke(avatarBox, Color3.fromRGB(255,255,255), wA(0.1), 1)
+    corner(avatarBox, 17)
+    stroke(avatarBox, Color3.fromRGB(255,255,255), wA(0.12), 1)
     local avatar = new("ImageLabel", {
         Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Image = "",
-        ImageTransparency = 1, ZIndex = 3,
+        ImageTransparency = 1, ZIndex = 6,
     }, avatarBox)
-    corner(avatar, 15)
+    corner(avatar, 17)
     local avatarPulse = new("Frame", {
         Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(70, 70, 75),
-        BackgroundTransparency = 0, BorderSizePixel = 0, ZIndex = 3,
+        BackgroundTransparency = 0, BorderSizePixel = 0, ZIndex = 6,
     }, avatarBox)
-    corner(avatarPulse, 15)
+    corner(avatarPulse, 17)
     local pulseActive = true
     task.spawn(function()
         while pulseActive and avatarPulse.Parent do
@@ -1458,18 +1440,47 @@ function Library:CreateWindow(opts)
             task.wait(0.7)
         end
     end)
-    local statusDot = new("Frame", {
-        AnchorPoint = Vector2.new(0, 0),
-        Position = UDim2.fromOffset(22, 22),
-        Size = UDim2.fromOffset(10, 10),
+
+    local statusHalo = new("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromOffset(28, 28),
+        Size = UDim2.fromOffset(20, 20),
         BackgroundColor3 = Color3.fromRGB(52, 211, 153),
-        BorderSizePixel = 0, ZIndex = 4,
+        BackgroundTransparency = wA(0.35), BorderSizePixel = 0, ZIndex = 7,
     }, userInfo)
-    corner(statusDot, 5)
+    corner(statusHalo, 10)
+    new("UIGradient", {
+        Color = ColorSequence.new(Color3.fromRGB(52, 211, 153)),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.4),
+            NumberSequenceKeypoint.new(1, 1),
+        }),
+        Rotation = 90,
+    }, statusHalo)
+    local statusDot = new("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromOffset(28, 28),
+        Size = UDim2.fromOffset(11, 11),
+        BackgroundColor3 = Color3.fromRGB(52, 211, 153),
+        BorderSizePixel = 0, ZIndex = 8,
+    }, userInfo)
+    corner(statusDot, 6)
+    new("UIGradient", {
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(110, 231, 183)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(34, 197, 94)),
+        }),
+        Rotation = 45,
+    }, statusDot)
     new("UIStroke", {
         Color = COLOR.BgDeep, Transparency = 0, Thickness = 2,
         ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
     }, statusDot)
+    local haloTween = TweenService:Create(statusHalo,
+        TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+        { Size = UDim2.fromOffset(26, 26), BackgroundTransparency = 1 })
+    haloTween:Play()
+
     task.spawn(function()
         local ok, content = pcall(function()
             return Players:GetUserThumbnailAsync(LocalPlayer.UserId,
@@ -1486,19 +1497,19 @@ function Library:CreateWindow(opts)
         end
     end)
     new("TextLabel", {
-        AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 36, 0.5, -7),
-        Size = UDim2.new(1, -36, 0, 13), BackgroundTransparency = 1,
+        AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 42, 0.5, -7),
+        Size = UDim2.new(1, -42, 0, 13), BackgroundTransparency = 1,
         Text = LocalPlayer.DisplayName or "Player",
-        Font = Enum.Font.GothamMedium, TextSize = 11, TextColor3 = Color3.fromRGB(255,255,255),
-        TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 3,
+        Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = Color3.fromRGB(255,255,255),
+        TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 6,
     }, userInfo)
     new("TextLabel", {
-        AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 36, 0.5, 6),
-        Size = UDim2.new(1, -36, 0, 11), BackgroundTransparency = 1,
+        AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 42, 0.5, 7),
+        Size = UDim2.new(1, -42, 0, 11), BackgroundTransparency = 1,
         Text = "@" .. (LocalPlayer.Name or "user"),
-        Font = Enum.Font.Gotham, TextSize = 9, TextColor3 = Color3.fromRGB(255,255,255),
-        TextTransparency = wA(0.4), TextXAlignment = Enum.TextXAlignment.Left,
-        TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 3,
+        Font = Enum.Font.Gotham, TextSize = 10, TextColor3 = Color3.fromRGB(255,255,255),
+        TextTransparency = wA(0.45), TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 6,
     }, userInfo)
 
     local content = new("Frame", {
@@ -1673,10 +1684,14 @@ function Window:Destroy()
     self._destroyed = true
     if not self.Window or not self.Gui then return end
     local w = self.Window
-    tween(w, 0.28, {
-        Size = UDim2.fromOffset(w.AbsoluteSize.X * 0.9, w.AbsoluteSize.Y * 0.9),
-    }, Enum.EasingStyle.Quart)
-    task.delay(0.3, function() if self.Gui then self.Gui:Destroy() end end)
+    local mainTween = tween(w, 0.3, {
+        Size = UDim2.fromOffset(w.AbsoluteSize.X * 0.85, w.AbsoluteSize.Y * 0.85),
+    }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    if self._glow then tween(self._glow, 0.3, { BackgroundTransparency = 1 }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out) end
+    if self._shadow then tween(self._shadow, 0.3, { BackgroundTransparency = 1 }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out) end
+    mainTween.Completed:Connect(function()
+        if self.Gui then self.Gui:Destroy() end
+    end)
 end
 
 function Window:SetSectionTitle(text)
@@ -1726,10 +1741,13 @@ function Window:_closeSearch()
     if not self._searchFrame or not self._searchFrame.Visible then return end
     local f = self._searchFrame
     if self._searchBox then self._searchBox.Text = "" end
-    tween(f, 0.18, { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 22) }, Enum.EasingStyle.Quart)
+    local mainTween = tween(f, 0.18, { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 22) }, Enum.EasingStyle.Quart)
     if self._searchStroke then tween(self._searchStroke, 0.18, { Transparency = 1 }) end
     if self._searchBox then tween(self._searchBox, 0.18, { TextTransparency = 1 }) end
-    task.delay(0.19, function() if f then f.Visible = false end end)
+    for _, d in ipairs(f:GetDescendants()) do
+        if d:IsA("ImageLabel") then tween(d, 0.18, { ImageTransparency = 1 }) end
+    end
+    mainTween.Completed:Connect(function() if f then f.Visible = false end end)
     if self.SectionTitle then
         self.SectionTitle.Visible = true
         self.SectionTitle.TextTransparency = 1
@@ -1809,9 +1827,15 @@ function Window:_toggleSearch()
     f.Size = UDim2.new(1, 0, 0, 22)
     self._searchStroke.Transparency = 1
     self._searchBox.TextTransparency = 1
+    for _, d in ipairs(f:GetDescendants()) do
+        if d:IsA("ImageLabel") then d.ImageTransparency = 1 end
+    end
     tween(f, 0.25, { BackgroundTransparency = wA(0.05), Size = UDim2.new(1, 0, 0, 26) }, Enum.EasingStyle.Quart)
     tween(self._searchStroke, 0.25, { Transparency = wA(0.1) })
     tween(self._searchBox, 0.25, { TextTransparency = 0 })
+    for _, d in ipairs(f:GetDescendants()) do
+        if d:IsA("ImageLabel") then tween(d, 0.25, { ImageTransparency = wA(0.55) }) end
+    end
     task.wait(0.05)
     self._searchBox:CaptureFocus()
 end
@@ -2595,14 +2619,14 @@ function Tab:CreateButton(opts)
     local cb = opts.Callback or function() end
     local copyValue = opts.CopyValue
     local confirmMsg = opts.ConfirmMessage
-    local card = makeCard(self, 38)
+    local card = makeCard(self, 44)
     attachHover(card)
     bindTooltip(card, opts.Tooltip)
     local hasIcon = opts.Icon and opts.Icon ~= ""
-    if hasIcon then makeIconSquare(card, 24, opts.Icon) end
+    if hasIcon then makeIconSquare(card, 28, opts.Icon) end
     local label = new("TextLabel", {
-        Position = UDim2.new(0, hasIcon and 47 or 13, 0, 0),
-        Size = UDim2.new(1, hasIcon and -60 or -26, 1, 0),
+        Position = UDim2.new(0, hasIcon and 51 or 13, 0, 0),
+        Size = UDim2.new(1, hasIcon and -64 or -26, 1, 0),
         BackgroundTransparency = 1,
         Text = opts.Name or "Button", Font = Enum.Font.GothamMedium, TextSize = 12,
         TextColor3 = opts.TextColor or COLOR.TextPrimary, TextXAlignment = Enum.TextXAlignment.Left,
