@@ -1674,20 +1674,38 @@ function Library:CreateWindow(opts)
 
     local dragBar = new("Frame", {
         Name = "DragBar",
-        AnchorPoint = Vector2.new(0.5, 0),
-        Position = UDim2.new(0.5, 0, 1, 22),
-        Size = UDim2.fromOffset(120, 6),
-        BackgroundColor3 = Color3.fromRGB(255,255,255),
-        BackgroundTransparency = 0.4, BorderSizePixel = 0,
-        ZIndex = 200, Visible = true,
-    }, window)
-    corner(dragBar, 3)
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.5, 0, 0.5, 235),
+        Size = UDim2.fromOffset(140, 8),
+        BackgroundColor3 = Color3.fromRGB(255, 60, 60),
+        BackgroundTransparency = 0, BorderSizePixel = 0,
+        ZIndex = 1000, Visible = true,
+    }, gui)
+    corner(dragBar, 4)
+    stroke(dragBar, Color3.fromRGB(255, 255, 255), 0, 2)
+    new("TextLabel", {
+        AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 1, 4),
+        Size = UDim2.fromOffset(140, 14), BackgroundTransparency = 1,
+        Text = "DRAG BAR", Font = Enum.Font.GothamBold, TextSize = 11,
+        TextColor3 = Color3.fromRGB(255, 80, 80), ZIndex = 1001,
+    }, dragBar)
     local dragHit = new("TextButton", {
         AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(160, 26), BackgroundTransparency = 1,
-        Text = "", AutoButtonColor = false, ZIndex = 201,
+        Size = UDim2.fromOffset(180, 28), BackgroundTransparency = 1,
+        Text = "", AutoButtonColor = false, ZIndex = 1001,
     }, dragBar)
     self._dragBar = dragBar
+    local function syncBarToWindow()
+        local wp = window.Position
+        local ws = window.Size
+        dragBar.Position = UDim2.new(
+            wp.X.Scale, wp.X.Offset,
+            wp.Y.Scale, wp.Y.Offset + (ws.Y.Offset / 2) + 25
+        )
+    end
+    window:GetPropertyChangedSignal("Position"):Connect(syncBarToWindow)
+    window:GetPropertyChangedSignal("Size"):Connect(syncBarToWindow)
+    syncBarToWindow()
     makeDraggable(window, dragHit, function() return self._hidden end)
     dragHit.MouseEnter:Connect(function()
         tween(dragBar, 0.18, { Size = UDim2.fromOffset(140, 7), BackgroundTransparency = 0.2 })
