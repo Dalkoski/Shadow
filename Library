@@ -179,13 +179,28 @@ Library.__index = Library
 
 function Library:SetLoaderUrl(url) self._loaderUrl = url end
 
+function Library:AutoExec(url)
+    if type(url) ~= "string" or url == "" then return false end
+    self._autoExecUrl = url
+    if not exec.queue_on_teleport then return false end
+    local payload = string.format(
+        "repeat task.wait() until game:IsLoaded() and game.Players.LocalPlayer\n"..
+        "local ok,err=pcall(function() loadstring(game:HttpGet(%q))() end)\n"..
+        "if not ok then warn('[Library] auto-exec failed: '..tostring(err)) end",
+        url
+    )
+    local ok = pcall(exec.queue_on_teleport, payload)
+    return ok
+end
+
 function Library:_armTeleportPersistence()
     if not exec.queue_on_teleport then return end
+    local url = self._autoExecUrl or self._loaderUrl
     local payload = string.format(
         "repeat task.wait() until game:IsLoaded() and game.Players.LocalPlayer\n"..
         "local ok,err=pcall(function() loadstring(game:HttpGet(%q))() end)\n"..
         "if not ok then warn('[Library] reload failed: '..tostring(err)) end",
-        self._loaderUrl
+        url
     )
     pcall(exec.queue_on_teleport, payload)
 end
@@ -320,90 +335,187 @@ function Library:_promptKey(opts, onSuccess, onCancel)
     })
     pcall(function() gui.Parent = CoreGui end)
     if not gui.Parent then gui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+
+    local backdrop = new("Frame", {
+        Size = UDim2.fromScale(1, 1), Position = UDim2.fromScale(0, 0),
+        BackgroundColor3 = Color3.fromRGB(0,0,0), BackgroundTransparency = 1,
+        BorderSizePixel = 0, ZIndex = 1,
+    }, gui)
+
+    local MW, MH = 440, 280
     local modal = new("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(420, 210), BackgroundColor3 = COLOR.BgDeep,
-        BorderSizePixel = 0, ClipsDescendants = true,
+        Size = UDim2.fromOffset(MW * 0.9, MH * 0.9), BackgroundColor3 = COLOR.BgDeep,
+        BackgroundTransparency = 1, BorderSizePixel = 0, ClipsDescendants = true, ZIndex = 2,
     }, gui)
     corner(modal, 14)
-    stroke(modal, Color3.fromRGB(255,255,255), wA(0.08), 1)
+    local modalStroke = stroke(modal, Color3.fromRGB(255,255,255), 1, 1)
+
+    local glow = new("Frame", {
+        Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(255,255,255),
+        BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 2,
+    }, modal)
+    corner(glow, 14)
     new("UIGradient", {
-        Color = ColorSequence.new(Color3.fromRGB(255,255,255)),
+        Color = ColorSequence.new(COLOR.Accent),
         Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.88),
+            NumberSequenceKeypoint.new(0, 0.75),
+            NumberSequenceKeypoint.new(0.4, 0.92),
             NumberSequenceKeypoint.new(1, 1),
         }),
         Rotation = 135,
+    }, glow)
+
+    local logoBox = new("Frame", {
+        Position = UDim2.fromOffset(20, 20), Size = UDim2.fromOffset(36, 36),
+        BackgroundColor3 = Color3.fromRGB(255,255,255), BackgroundTransparency = wA(0.06),
+        BorderSizePixel = 0, ZIndex = 3,
     }, modal)
-    new("TextLabel", {
-        Position = UDim2.fromOffset(20, 18), Size = UDim2.new(1, -40, 0, 18),
+    corner(logoBox, 8)
+    stroke(logoBox, Color3.fromRGB(255,255,255), wA(0.12), 1)
+    local logoIconHolder = new("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(18, 18), BackgroundTransparency = 1, ZIndex = 4,
+    }, logoBox)
+    applyIcon(logoIconHolder, opts.Icon or "key-round", 18, 0.85)
+
+    local title = new("TextLabel", {
+        Position = UDim2.fromOffset(68, 22), Size = UDim2.new(1, -88, 0, 18),
         BackgroundTransparency = 1, Text = opts.Title or "Key System",
-        Font = Enum.Font.GothamMedium, TextSize = 14, TextColor3 = COLOR.TextPrimary,
-        TextXAlignment = Enum.TextXAlignment.Left,
+        Font = Enum.Font.GothamBold, TextSize = 15, TextColor3 = COLOR.TextPrimary,
+        TextXAlignment = Enum.TextXAlignment.Left, TextTransparency = 1, ZIndex = 3,
     }, modal)
-    new("TextLabel", {
-        Position = UDim2.fromOffset(20, 40), Size = UDim2.new(1, -40, 0, 14),
-        BackgroundTransparency = 1, Text = opts.Subtitle or "Enter your key",
+    local subtitle = new("TextLabel", {
+        Position = UDim2.fromOffset(68, 42), Size = UDim2.new(1, -88, 0, 14),
+        BackgroundTransparency = 1, Text = opts.Subtitle or "Authentication required",
         Font = Enum.Font.Gotham, TextSize = 11, TextColor3 = Color3.fromRGB(255,255,255),
-        TextTransparency = wA(0.5), TextXAlignment = Enum.TextXAlignment.Left,
+        TextTransparency = 1, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 3,
     }, modal)
-    new("TextLabel", {
-        Position = UDim2.fromOffset(20, 62), Size = UDim2.new(1, -40, 0, 40),
+    local noteLbl = new("TextLabel", {
+        Position = UDim2.fromOffset(20, 76), Size = UDim2.new(1, -40, 0, 40),
         BackgroundTransparency = 1, Text = opts.Note or "",
-        Font = Enum.Font.Gotham, TextSize = 10, TextColor3 = Color3.fromRGB(255,255,255),
-        TextTransparency = wA(0.4), TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true,
+        Font = Enum.Font.Gotham, TextSize = 11, TextColor3 = Color3.fromRGB(255,255,255),
+        TextTransparency = 1, TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, ZIndex = 3,
     }, modal)
+
     local inputFrame = new("Frame", {
-        Position = UDim2.fromOffset(20, 112), Size = UDim2.new(1, -40, 0, 32),
-        BackgroundColor3 = Color3.fromRGB(255,255,255), BackgroundTransparency = wA(0.05),
-        BorderSizePixel = 0,
+        Position = UDim2.fromOffset(20, 132), Size = UDim2.new(1, -40, 0, 36),
+        BackgroundColor3 = Color3.fromRGB(255,255,255), BackgroundTransparency = 1,
+        BorderSizePixel = 0, ZIndex = 3,
     }, modal)
-    corner(inputFrame, 7)
-    local inputStroke = stroke(inputFrame, Color3.fromRGB(255,255,255), wA(0.1), 1)
+    corner(inputFrame, 8)
+    local inputStroke = stroke(inputFrame, Color3.fromRGB(255,255,255), 1, 1)
     local input = new("TextBox", {
-        Position = UDim2.fromOffset(12, 0), Size = UDim2.new(1, -24, 1, 0),
-        BackgroundTransparency = 1, Text = "", PlaceholderText = "Paste your key here",
+        Position = UDim2.fromOffset(14, 0), Size = UDim2.new(1, -28, 1, 0),
+        BackgroundTransparency = 1, Text = "", TextTransparency = 1,
+        PlaceholderText = opts.Placeholder or "Paste your key here",
         PlaceholderColor3 = Color3.fromRGB(140,140,140), Font = Enum.Font.Gotham,
         TextSize = 12, TextColor3 = COLOR.TextPrimary,
-        TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false,
+        TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false, ZIndex = 4,
     }, inputFrame)
+    input.Focused:Connect(function() tween(inputStroke, 0.15, { Color = COLOR.Accent, Transparency = wA(0.4) }) end)
+    input.FocusLost:Connect(function() tween(inputStroke, 0.15, { Color = Color3.fromRGB(255,255,255), Transparency = wA(0.12) }) end)
+
     local submit = new("TextButton", {
-        Position = UDim2.fromOffset(20, 156), Size = UDim2.new(0.5, -25, 0, 34),
-        BackgroundColor3 = Color3.fromRGB(255,255,255), BackgroundTransparency = wA(0.85),
-        BorderSizePixel = 0, Text = "Submit", Font = Enum.Font.GothamMedium,
-        TextSize = 12, TextColor3 = COLOR.KnobOn, AutoButtonColor = false,
+        Position = UDim2.fromOffset(20, 188), Size = UDim2.new(0.5, -25, 0, 38),
+        BackgroundColor3 = COLOR.Accent, BackgroundTransparency = 1,
+        BorderSizePixel = 0, Text = "", AutoButtonColor = false, ZIndex = 3,
     }, modal)
-    corner(submit, 8)
-    submit.MouseEnter:Connect(function() tween(submit, 0.15, { BackgroundTransparency = wA(0.7) }) end)
-    submit.MouseLeave:Connect(function() tween(submit, 0.15, { BackgroundTransparency = wA(0.85) }) end)
+    corner(submit, 9)
+    local submitLbl = new("TextLabel", {
+        Size = UDim2.fromScale(1,1), BackgroundTransparency = 1, Text = "Submit",
+        Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = COLOR.KnobOn,
+        TextTransparency = 1, ZIndex = 4,
+    }, submit)
+    submit.MouseEnter:Connect(function() tween(submit, 0.15, { BackgroundTransparency = wA(0.85) }) end)
+    submit.MouseLeave:Connect(function() tween(submit, 0.15, { BackgroundTransparency = wA(1) }) end)
+
     local cancel = new("TextButton", {
-        AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -20, 0, 156),
-        Size = UDim2.new(0.5, -25, 0, 34), BackgroundTransparency = wA(0.05),
-        BackgroundColor3 = Color3.fromRGB(255,255,255), BorderSizePixel = 0,
-        Text = "Cancel", Font = Enum.Font.GothamMedium, TextSize = 12,
-        TextColor3 = Color3.fromRGB(255,255,255), AutoButtonColor = false,
+        AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -20, 0, 188),
+        Size = UDim2.new(0.5, -25, 0, 38), BackgroundColor3 = Color3.fromRGB(255,255,255),
+        BackgroundTransparency = 1, BorderSizePixel = 0,
+        Text = "", AutoButtonColor = false, ZIndex = 3,
     }, modal)
-    corner(cancel, 8)
-    stroke(cancel, Color3.fromRGB(255,255,255), wA(0.1), 1)
-    cancel.MouseButton1Click:Connect(function() gui:Destroy(); if onCancel then onCancel() end end)
+    corner(cancel, 9)
+    local cancelStroke = stroke(cancel, Color3.fromRGB(255,255,255), 1, 1)
+    local cancelLbl = new("TextLabel", {
+        Size = UDim2.fromScale(1,1), BackgroundTransparency = 1, Text = "Cancel",
+        Font = Enum.Font.GothamMedium, TextSize = 12, TextColor3 = Color3.fromRGB(255,255,255),
+        TextTransparency = 1, ZIndex = 4,
+    }, cancel)
+    cancel.MouseEnter:Connect(function() tween(cancel, 0.15, { BackgroundTransparency = wA(0.06) }) end)
+    cancel.MouseLeave:Connect(function() tween(cancel, 0.15, { BackgroundTransparency = 1 }) end)
+
+    tween(backdrop, 0.3, { BackgroundTransparency = 0.5 })
+    tween(modal, 0.45, { Size = UDim2.fromOffset(MW, MH), BackgroundTransparency = 0 }, Enum.EasingStyle.Back)
+    tween(modalStroke, 0.4, { Transparency = wA(0.1) })
+    task.wait(0.1)
+    tween(glow, 0.4, { BackgroundTransparency = 0 })
+    tween(title, 0.3, { TextTransparency = 0 })
+    task.wait(0.05)
+    tween(subtitle, 0.3, { TextTransparency = wA(0.5) })
+    tween(noteLbl, 0.3, { TextTransparency = wA(0.45) })
+    tween(inputFrame, 0.3, { BackgroundTransparency = wA(0.05) })
+    tween(inputStroke, 0.3, { Transparency = wA(0.12) })
+    tween(input, 0.3, { TextTransparency = 0 })
+    tween(submit, 0.3, { BackgroundTransparency = wA(1) })
+    tween(submitLbl, 0.3, { TextTransparency = 0 })
+    tween(cancel, 0.3, { BackgroundTransparency = 1 })
+    tween(cancelStroke, 0.3, { Transparency = wA(0.1) })
+    tween(cancelLbl, 0.3, { TextTransparency = wA(0.85) })
+
+    local closing = false
+    local function closeAnim(success, cb)
+        if closing then return end
+        closing = true
+        if success then
+            tween(inputStroke, 0.2, { Color = COLOR.Success, Transparency = 0 })
+            tween(submit, 0.2, { BackgroundColor3 = COLOR.Success })
+            tween(glow, 0.3, { BackgroundColor3 = COLOR.Success })
+            task.wait(0.35)
+        end
+        tween(backdrop, 0.3, { BackgroundTransparency = 1 })
+        tween(modal, 0.3, {
+            Size = UDim2.fromOffset(MW * 0.9, MH * 0.9),
+            BackgroundTransparency = 1,
+        }, Enum.EasingStyle.Quart)
+        tween(modalStroke, 0.3, { Transparency = 1 })
+        tween(glow, 0.3, { BackgroundTransparency = 1 })
+        for _, d in ipairs(modal:GetDescendants()) do
+            if d:IsA("TextLabel") or d:IsA("TextBox") then tween(d, 0.2, { TextTransparency = 1 }) end
+            if d:IsA("UIStroke") then tween(d, 0.2, { Transparency = 1 }) end
+            if d:IsA("Frame") and d ~= glow then tween(d, 0.2, { BackgroundTransparency = 1 }) end
+            if d:IsA("ImageLabel") then tween(d, 0.2, { ImageTransparency = 1 }) end
+        end
+        task.delay(0.32, function() if gui then gui:Destroy() end if cb then cb() end end)
+    end
+
+    cancel.MouseButton1Click:Connect(function()
+        closeAnim(false, function() if onCancel then onCancel() end end)
+    end)
+
     local function trySubmit()
+        if closing then return end
         local text = input.Text
         for _, k in ipairs(keys) do
             if text == k then
                 if opts.SaveKey then safeWrite(path, text) end
-                gui:Destroy(); onSuccess(); return
+                closeAnim(true, function() onSuccess() end)
+                return
             end
         end
         tween(inputStroke, 0.15, { Color = COLOR.Danger, Transparency = 0 })
         local origPos = modal.Position
-        for _ = 1, 3 do
-            tween(modal, 0.05, { Position = origPos + UDim2.fromOffset(10, 0) }); task.wait(0.05)
-            tween(modal, 0.05, { Position = origPos - UDim2.fromOffset(10, 0) }); task.wait(0.05)
+        for _ = 1, 4 do
+            tween(modal, 0.05, { Position = origPos + UDim2.fromOffset(12, 0) }, Enum.EasingStyle.Quad)
+            task.wait(0.05)
+            tween(modal, 0.05, { Position = origPos - UDim2.fromOffset(12, 0) }, Enum.EasingStyle.Quad)
+            task.wait(0.05)
         end
-        tween(modal, 0.05, { Position = origPos })
-        task.wait(0.4)
-        tween(inputStroke, 0.3, { Color = Color3.fromRGB(255,255,255), Transparency = wA(0.1) })
+        tween(modal, 0.06, { Position = origPos })
+        task.wait(0.5)
+        tween(inputStroke, 0.3, { Color = Color3.fromRGB(255,255,255), Transparency = wA(0.12) })
     end
     submit.MouseButton1Click:Connect(trySubmit)
     input.FocusLost:Connect(function(enter) if enter then trySubmit() end end)
@@ -455,6 +567,7 @@ function Library:CreateWindow(opts)
         repeat task.wait() until done
         if not passed then return nil end
     end
+    if opts.AutoExec then Library:AutoExec(opts.AutoExec) end
     if opts.Theme and THEMES[opts.Theme] then
         for k, v in pairs(THEMES[opts.Theme]) do COLOR[k] = v end
     end
@@ -516,8 +629,9 @@ function Library:CreateWindow(opts)
     new("UIGradient", {
         Color = ColorSequence.new(Color3.fromRGB(255,255,255)),
         Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.92),
-            NumberSequenceKeypoint.new(0.5, 0.98),
+            NumberSequenceKeypoint.new(0, 0.78),
+            NumberSequenceKeypoint.new(0.35, 0.92),
+            NumberSequenceKeypoint.new(0.7, 0.99),
             NumberSequenceKeypoint.new(1, 1),
         }),
         Rotation = 135,
@@ -599,7 +713,7 @@ function Library:CreateWindow(opts)
     end
     topbarBtn("search",   1, function() self:_toggleSearch() end)
     topbarBtn("settings", 2, function() self:_openSettings() end)
-    topbarBtn("minus",    3, function() self:Minimize() end)
+    topbarBtn("minus",    3, function() self:SetVisibility(false) end)
     topbarBtn("x",        4, function() self:Destroy() end)
 
     local body = new("Frame", {
@@ -747,10 +861,10 @@ function Window:Hide()
     if self._hidden then return end
     self._hidden = true
     local w = self.Window
-    tween(w, 0.25, {
-        Size = UDim2.fromOffset(w.AbsoluteSize.X * 0.92, w.AbsoluteSize.Y * 0.92),
-    }, Enum.EasingStyle.Quart)
-    task.delay(0.26, function()
+    tween(w, 0.35, {
+        Size = UDim2.fromOffset(self._normalSize.X.Offset * 0.88, self._normalSize.Y.Offset * 0.88),
+    }, Enum.EasingStyle.Quint)
+    task.delay(0.36, function()
         if self._hidden and w then w.Visible = false end
     end)
     if self._mobilePrompt then self._mobilePrompt.Visible = true end
@@ -759,10 +873,14 @@ end
 function Window:Unhide()
     if not self._hidden then return end
     self._hidden = false
+    if self._minimized then
+        self._minimized = false
+        if self.Body then self.Body.Visible = true end
+    end
     local w = self.Window
     w.Visible = true
-    w.Size = UDim2.fromOffset(self._normalSize.X.Offset * 0.92, self._normalSize.Y.Offset * 0.92)
-    tween(w, 0.35, { Size = self._normalSize }, Enum.EasingStyle.Back)
+    w.Size = UDim2.fromOffset(self._normalSize.X.Offset * 0.88, self._normalSize.Y.Offset * 0.88)
+    tween(w, 0.4, { Size = self._normalSize }, Enum.EasingStyle.Quint)
     if self._mobilePrompt then self._mobilePrompt.Visible = false end
 end
 
@@ -807,36 +925,58 @@ function Window:ModifyTheme(name)
     end
 end
 
+function Window:_closeSearch()
+    if not self._searchFrame or not self._searchFrame.Visible then return end
+    local f = self._searchFrame
+    if self._searchBox then self._searchBox.Text = "" end
+    tween(f, 0.18, { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 22) }, Enum.EasingStyle.Quart)
+    if self._searchStroke then tween(self._searchStroke, 0.18, { Transparency = 1 }) end
+    if self._searchBox then tween(self._searchBox, 0.18, { TextTransparency = 1 }) end
+    task.delay(0.19, function() if f then f.Visible = false end end)
+    if self.SectionTitle then
+        self.SectionTitle.Visible = true
+        self.SectionTitle.TextTransparency = 1
+        tween(self.SectionTitle, 0.2, { TextTransparency = 0 })
+    end
+    if self.ActiveTab then
+        for _, el in ipairs(self.ActiveTab.Panel:GetChildren()) do
+            if el:IsA("GuiObject") and not el:IsA("UIListLayout") then el.Visible = true end
+        end
+    end
+end
+
 function Window:_toggleSearch()
     if self._searchFrame and self._searchFrame.Visible then
-        self._searchFrame.Visible = false
-        if self.ActiveTab then
-            for _, el in ipairs(self.ActiveTab.Panel:GetChildren()) do
-                if el:IsA("GuiObject") and not el:IsA("UIListLayout") then el.Visible = true end
-            end
-        end
+        self:_closeSearch()
         return
     end
     if not self._searchFrame then
         local f = new("Frame", {
             Name = "SearchBar",
-            Position = UDim2.fromOffset(self.SidebarW + 16, 12),
-            Size = UDim2.new(1, -(self.SidebarW + 32), 0, 26),
+            Position = UDim2.fromOffset(0, 0),
+            Size = UDim2.new(1, 0, 0, 26),
             BackgroundColor3 = Color3.fromRGB(255,255,255),
-            BackgroundTransparency = wA(0.05),
-            BorderSizePixel = 0, ZIndex = 20,
-        }, self.Body)
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0, ZIndex = 20, Visible = false,
+        }, self.Content)
         corner(f, 6)
-        stroke(f, Color3.fromRGB(255,255,255), wA(0.1), 1)
+        local fStroke = stroke(f, Color3.fromRGB(255,255,255), 1, 1)
+        local searchIcon = new("Frame", {
+            AnchorPoint = Vector2.new(0, 0.5),
+            Position = UDim2.new(0, 10, 0.5, 0),
+            Size = UDim2.fromOffset(14, 14), BackgroundTransparency = 1, ZIndex = 21,
+        }, f)
+        applyIcon(searchIcon, "search", 14, 0.55)
         local box = new("TextBox", {
-            Position = UDim2.fromOffset(10, 0), Size = UDim2.new(1, -20, 1, 0),
-            BackgroundTransparency = 1, Text = "",
+            Position = UDim2.fromOffset(30, 0), Size = UDim2.new(1, -40, 1, 0),
+            BackgroundTransparency = 1, Text = "", TextTransparency = 1,
             PlaceholderText = "Search...", PlaceholderColor3 = Color3.fromRGB(140,140,140),
             Font = Enum.Font.Gotham, TextSize = 11, TextColor3 = COLOR.TextPrimary,
             TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false, ZIndex = 21,
         }, f)
         self._searchFrame = f
         self._searchBox = box
+        self._searchStroke = fStroke
         box:GetPropertyChangedSignal("Text"):Connect(function()
             local q = string.lower(box.Text)
             if not self.ActiveTab then return end
@@ -854,9 +994,28 @@ function Window:_toggleSearch()
                 end
             end
         end)
+        box.FocusLost:Connect(function(enter)
+            if enter and box.Text == "" then self:_closeSearch() end
+        end)
     end
-    self._searchFrame.Visible = true
-    task.wait()
+    local f = self._searchFrame
+    if self.SectionTitle then
+        tween(self.SectionTitle, 0.15, { TextTransparency = 1 })
+        task.delay(0.15, function()
+            if self._searchFrame and self._searchFrame.Visible then
+                self.SectionTitle.Visible = false
+            end
+        end)
+    end
+    f.Visible = true
+    f.BackgroundTransparency = 1
+    f.Size = UDim2.new(1, 0, 0, 22)
+    self._searchStroke.Transparency = 1
+    self._searchBox.TextTransparency = 1
+    tween(f, 0.25, { BackgroundTransparency = wA(0.05), Size = UDim2.new(1, 0, 0, 26) }, Enum.EasingStyle.Quart)
+    tween(self._searchStroke, 0.25, { Transparency = wA(0.1) })
+    tween(self._searchBox, 0.25, { TextTransparency = 0 })
+    task.wait(0.05)
     self._searchBox:CaptureFocus()
 end
 
@@ -941,6 +1100,7 @@ end
 
 function Window:_openSettings()
     if not self._settingsTab then return end
+    self:_closeSearch()
     self._previousTab = self.ActiveTab
     self:_showTab(self._settingsTab, "Settings")
 end
@@ -1038,6 +1198,7 @@ function Window:CreateTab(name, icon)
 end
 
 function Window:SetActiveTab(tab)
+    self:_closeSearch()
     self.ActiveTab = tab
     self:_showTab(tab, tab._name)
 end
@@ -1857,25 +2018,26 @@ function Window:SetStatus(opts)
         Text = opts.Label or "Idle", Font = Enum.Font.GothamMedium, TextSize = 12,
         TextColor3 = COLOR.TextPrimary, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 9,
     }, row)
-    local counterValLbl
-    if opts.Counter ~= nil then
-        counterValLbl = new("TextLabel", {
-            AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -13, 0.5, -7),
-            Size = UDim2.fromOffset(120, 18), BackgroundTransparency = 1,
-            Text = tostring(opts.Counter), Font = Enum.Font.GothamBold, TextSize = 14,
-            TextColor3 = COLOR.TextPrimary, TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 9,
-        }, row)
-        new("TextLabel", {
-            AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -13, 0.5, 8),
-            Size = UDim2.fromOffset(120, 11), BackgroundTransparency = 1,
-            Text = opts.CounterLabel or "COLLECTED", Font = Enum.Font.GothamMedium, TextSize = 8,
-            TextColor3 = Color3.fromRGB(255,255,255), TextTransparency = wA(0.4),
-            TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 9,
-        }, row)
+    local rightLbl = new("TextLabel", {
+        AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -13, 0.5, 0),
+        Size = UDim2.fromOffset(280, 14), BackgroundTransparency = 1,
+        Text = opts.Game or "", Font = Enum.Font.GothamMedium, TextSize = 12,
+        TextColor3 = COLOR.TextPrimary, TextTransparency = wA(0.8),
+        TextXAlignment = Enum.TextXAlignment.Right, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 9,
+    }, row)
+    if not opts.Game then
+        task.spawn(function()
+            local ok, info = pcall(function()
+                return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
+            end)
+            if ok and info and info.Name and rightLbl.Parent then
+                rightLbl.Text = info.Name
+            end
+        end)
     end
     return {
         SetLabel = function(_, t) labelLbl.Text = t end,
-        SetCounter = function(_, v) if counterValLbl then counterValLbl.Text = tostring(v) end end,
+        SetGame = function(_, t) rightLbl.Text = tostring(t) end,
         SetAccent = function(_, c)
             row.BackgroundColor3 = c
             local st = row:FindFirstChildOfClass("UIStroke")
