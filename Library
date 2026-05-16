@@ -1,6 +1,6 @@
 --[[
 	╔══════════════════════════════════════════════════════════╗
-	║                    VaenHub v3.1                          ║
+	║                    VaenHub v3.2                          ║
 	║       Final polish + spec fixes — by Dalkoski            ║
 	╚══════════════════════════════════════════════════════════╝
 ]]
@@ -48,7 +48,7 @@ local RADIUS = 8
 --==============================================================
 -- ROOT + FORWARD DECLS
 --==============================================================
-local VaenHub = { Version = "3.1.0", Flags = {}, Windows = {} }
+local VaenHub = { Version = "3.2.0", Flags = {}, Windows = {} }
 local Window = {}
 local Tab = {}
 local Elem = {}
@@ -157,7 +157,7 @@ function VaenHub:CreateWindow(cfg)
 		_protect = cfg.Protect or {},
 		_configSave = cfg.Config or {},
 		_name = cfg.Name or "VaenHub",
-		_version = cfg.Version or "v3.1",
+		_version = cfg.Version or "v3.2",
 		_currentTab = nil,
 		_tabOrder = 0,
 	}, {__index = Window})
@@ -666,13 +666,26 @@ function VaenHub:_BuildWindow(win)
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(WINDOW_W, WINDOW_H),
-		BackgroundColor3 = THEME.Background,
+		BackgroundColor3 = Color3.fromRGB(15, 13, 25),
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
 	}, gui)
 	corner(main, 12)
 	stroke(main, Color3.fromRGB(255,255,255), 0.9)
-	gradient(main, Color3.fromRGB(16, 14, 26), Color3.fromRGB(10, 8, 15), 90)
+
+	-- Gradient texture overlay (ImageLabel method, not UIGradient)
+	local bgImage = new("ImageLabel", {
+		Name = "BgGradient",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Image = "rbxassetid://6015886855",
+		ImageColor3 = Color3.fromRGB(255, 255, 255),
+		ImageTransparency = 0.2,
+		ScaleType = Enum.ScaleType.Stretch,
+		ZIndex = 1,
+	}, main)
+	corner(bgImage, 12)
+
 	win._main = main
 
 	-- VaenHub V watermark (subtle background mark)
@@ -688,7 +701,7 @@ function VaenHub:_BuildWindow(win)
 		TextTransparency = 0.95,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		TextYAlignment = Enum.TextYAlignment.Bottom,
-		ZIndex = 0,
+		ZIndex = 1,
 	}, main)
 
 	-- TOPBAR
@@ -697,6 +710,7 @@ function VaenHub:_BuildWindow(win)
 		Size = UDim2.new(1, 0, 0, TOPBAR_H),
 		BackgroundColor3 = THEME.Topbar,
 		BorderSizePixel = 0,
+		ZIndex = 2,
 	}, main)
 	win._topbar = topbar
 
@@ -765,36 +779,52 @@ function VaenHub:_BuildWindow(win)
 		badge.Visible = true
 	end)
 
-	-- Topbar buttons — ImageButton with LUCIDE assets, 28px hit boxes, 8px spacing
-	local function topImgBtn(name, assetId, xOff)
-		local b = new("ImageButton", {
+	-- Topbar buttons — horizontal row container with text glyphs
+	local btnRow = new("Frame", {
+		Name = "BtnRow",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -10, 0.5, 0),
+		Size = UDim2.fromOffset(140, 28),
+		BackgroundTransparency = 1,
+		ZIndex = 3,
+	}, topbar)
+
+	local btnRowLayout = new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		HorizontalAlignment = Enum.HorizontalAlignment.Right,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		Padding = UDim.new(0, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, btnRow)
+
+	local function topBtn(name, glyph, layoutOrder, sizeOverride)
+		local b = new("TextButton", {
 			Name = name,
-			Size = UDim2.fromOffset(28, 28),
-			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, xOff, 0.5, 0),
+			Size = UDim2.fromOffset(24, 24),
 			BackgroundTransparency = 1,
-			Image = assetId,
-			ImageColor3 = THEME.TextDim,
-			ScaleType = Enum.ScaleType.Fit,
+			Text = glyph,
+			Font = Enum.Font.GothamBold,
+			TextSize = sizeOverride or 16,
+			TextColor3 = THEME.TextDim,
 			AutoButtonColor = false,
-		}, topbar)
-		-- Inset the visual icon inside the button hitbox
-		new("UIPadding", {
-			PaddingTop = UDim.new(0, 5),
-			PaddingBottom = UDim.new(0, 5),
-			PaddingLeft = UDim.new(0, 5),
-			PaddingRight = UDim.new(0, 5),
-		}, b)
-		b.MouseEnter:Connect(function() tween(b, 0.15, {ImageColor3 = THEME.Text}, Enum.EasingStyle.Quad) end)
-		b.MouseLeave:Connect(function() tween(b, 0.15, {ImageColor3 = THEME.TextDim}, Enum.EasingStyle.Quad) end)
+			LayoutOrder = layoutOrder,
+			ZIndex = 3,
+		}, btnRow)
+		b.MouseEnter:Connect(function() tween(b, 0.15, {TextColor3 = THEME.Text}, Enum.EasingStyle.Quad) end)
+		b.MouseLeave:Connect(function() tween(b, 0.15, {TextColor3 = THEME.TextDim}, Enum.EasingStyle.Quad) end)
 		return b
 	end
 
-	-- Right-to-left, 36px spacing between buttons
-	local closeBtn  = topImgBtn("Close",    LUCIDE.x,      -12)
-	local miniBtn   = topImgBtn("Mini",     LUCIDE.minus,  -48)
-	local cogBtn    = topImgBtn("Settings", LUCIDE.cog,    -84)
-	local searchBtn = topImgBtn("Search",   LUCIDE.search, -120)
+	-- LayoutOrder 1=leftmost. Order left-to-right: Search, Settings, Min, Close
+	-- Glyphs chosen to render reliably in Gotham font:
+	--   ⌕ (U+2315) - magnifying glass
+	--   ⚙ (U+2699) - gear  
+	--   − (U+2212) - minus sign
+	--   ✕ (U+2715) - multiplication X
+	local searchBtn = topBtn("Search",   "⌕",  1, 18)
+	local cogBtn    = topBtn("Settings", "⚙",  2, 16)
+	local miniBtn   = topBtn("Mini",     "−",  3, 20)
+	local closeBtn  = topBtn("Close",    "✕",  4, 14)
 
 	closeBtn.MouseButton1Click:Connect(function() win:Destroy() end)
 	miniBtn.MouseButton1Click:Connect(function() win:Minimise() end)
@@ -809,6 +839,7 @@ function VaenHub:_BuildWindow(win)
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ClipsDescendants = false,
+		ZIndex = 2,
 	}, main)
 	win._tabBar = tabBar
 
@@ -843,6 +874,7 @@ function VaenHub:_BuildWindow(win)
 		Size = UDim2.new(1, 0, 1, -(TOPBAR_H + TABBAR_H)),
 		Position = UDim2.fromOffset(0, TOPBAR_H + TABBAR_H),
 		BackgroundTransparency = 1,
+		ZIndex = 2,
 	}, main)
 	win._content = content
 
@@ -878,6 +910,7 @@ function VaenHub:_BuildTab(win, t)
 		LayoutOrder = win._tabOrder,
 		Visible = true,
 		ClipsDescendants = false,
+		ZIndex = 3,
 	}, win._tabBar)
 	corner(btn, 6)
 
