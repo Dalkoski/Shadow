@@ -773,17 +773,17 @@ function VaenHub:_BuildWindow(win)
 		badge.Visible = true
 	end)
 
-	-- Topbar buttons — horizontal row container with text glyphs
+	-- Topbar buttons — ImageButton with exact spec asset IDs, horizontal row
 	local btnRow = new("Frame", {
 		Name = "BtnRow",
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -10, 0.5, 0),
-		Size = UDim2.fromOffset(140, 28),
+		Size = UDim2.fromOffset(110, 24),
 		BackgroundTransparency = 1,
 		ZIndex = 3,
 	}, topbar)
 
-	local btnRowLayout = new("UIListLayout", {
+	new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
 		HorizontalAlignment = Enum.HorizontalAlignment.Right,
 		VerticalAlignment = Enum.VerticalAlignment.Center,
@@ -791,31 +791,28 @@ function VaenHub:_BuildWindow(win)
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, btnRow)
 
-	local function topBtn(name, glyph, layoutOrder)
-		local b = new("TextButton", {
+	local function topImgBtn(name, assetId, layoutOrder)
+		local b = new("ImageButton", {
 			Name = name,
-			Size = UDim2.fromOffset(24, 24),
+			Size = UDim2.fromOffset(18, 18),
 			BackgroundTransparency = 1,
-			Text = glyph,
-			Font = Enum.Font.GothamBold,
-			TextSize = 14,
-			TextXAlignment = Enum.TextXAlignment.Center,
-			TextYAlignment = Enum.TextYAlignment.Center,
-			TextColor3 = THEME.TextDim,
+			Image = assetId,
+			ImageColor3 = THEME.TextDim,
+			ScaleType = Enum.ScaleType.Fit,
 			AutoButtonColor = false,
 			LayoutOrder = layoutOrder,
 			ZIndex = 3,
 		}, btnRow)
-		b.MouseEnter:Connect(function() tween(b, 0.15, {TextColor3 = THEME.Text}, Enum.EasingStyle.Quad) end)
-		b.MouseLeave:Connect(function() tween(b, 0.15, {TextColor3 = THEME.TextDim}, Enum.EasingStyle.Quad) end)
+		b.MouseEnter:Connect(function() tween(b, 0.15, {ImageColor3 = THEME.Text}, Enum.EasingStyle.Quad) end)
+		b.MouseLeave:Connect(function() tween(b, 0.15, {ImageColor3 = THEME.TextDim}, Enum.EasingStyle.Quad) end)
 		return b
 	end
 
 	-- LayoutOrder 1=leftmost. Left-to-right: Search, Settings, Min, Close
-	local searchBtn = topBtn("Search",   "Q",  1)
-	local cogBtn    = topBtn("Settings", "S",  2)
-	local miniBtn   = topBtn("Mini",     "_",  3)
-	local closeBtn  = topBtn("Close",    "X",  4)
+	local searchBtn = topImgBtn("Search",   "rbxassetid://11432840426", 1)
+	local cogBtn    = topImgBtn("Settings", "rbxassetid://11422143467", 2)
+	local miniBtn   = topImgBtn("Mini",     "rbxassetid://11432842426", 3)
+	local closeBtn  = topImgBtn("Close",    "rbxassetid://11293981513", 4)
 
 	closeBtn.MouseButton1Click:Connect(function() win:Destroy() end)
 	miniBtn.MouseButton1Click:Connect(function() win:Minimise() end)
