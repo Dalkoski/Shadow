@@ -1,2051 +1,1150 @@
 --[[
-	╔══════════════════════════════════════════════════════════╗
-	║                    VaenHub v3.7                          ║
-	║       Final polish + spec fixes — by Dalkoski            ║
-	╚══════════════════════════════════════════════════════════╝
+	ExampleHub Shell — static visual mockup
+	Direct port of example_hub.html. No API, no callbacks, all values hardcoded.
+	Goal: get the visual exactly 1:1, then we add behavior in a later pass.
 ]]
 
-local function svc(n) local s = game:GetService(n); return cloneref and cloneref(s) or s end
-local UserInputService = svc("UserInputService")
-local TweenService     = svc("TweenService")
-local Players          = svc("Players")
-local CoreGui          = svc("CoreGui")
-local HttpService      = svc("HttpService")
-local RunService       = svc("RunService")
-local Lighting         = svc("Lighting")
-local TeleportService  = svc("TeleportService")
-local GuiService       = svc("GuiService")
-local LocalPlayer      = Players.LocalPlayer
+local Players          = game:GetService("Players")
+local CoreGui          = game:GetService("CoreGui")
+local LocalPlayer      = Players.LocalPlayer or Players:GetPropertyChangedSignal("LocalPlayer"):Wait() and Players.LocalPlayer
 
 --==============================================================
--- THEME
+-- HELPERS
 --==============================================================
-local THEME = {
-	Background   = Color3.fromRGB(13, 13, 19),
-	Topbar       = Color3.fromRGB(16, 16, 23),
-	ElementBg    = Color3.fromRGB(20, 20, 28),
-	ElementHover = Color3.fromRGB(28, 28, 38),
-	Border       = Color3.fromRGB(40, 40, 55),
-	Text         = Color3.fromRGB(240, 240, 245),
-	TextDim      = Color3.fromRGB(155, 155, 170),
-	TextFaint    = Color3.fromRGB(105, 105, 125),
-	-- Gradient stops (indigo → purple, like mockup)
-	AccentStart  = Color3.fromRGB(99, 102, 241),
-	AccentEnd    = Color3.fromRGB(168, 85, 247),
-	AccentGlow   = Color3.fromRGB(168, 85, 247),
-	Success      = Color3.fromRGB(34, 197, 94),
-	Warning      = Color3.fromRGB(250, 204, 21),
-	Danger       = Color3.fromRGB(239, 68, 68),
-}
-
-local WINDOW_W, WINDOW_H = 600, 400
-local TOPBAR_H = 44
-local TABBAR_H = 44
-local ELEMENT_H = 34
-local ELEM_GAP = 6
-local RADIUS = 8
-
---==============================================================
--- ROOT + FORWARD DECLS
---==============================================================
-local VaenHub = { Version = "3.7.0", Flags = {}, Windows = {} }
-local Window = {}
-local Tab = {}
-local Elem = {}
-
---==============================================================
--- UTILS
---==============================================================
-local function tween(obj, t, props, style, dir)
-	local tw = TweenService:Create(obj, TweenInfo.new(t, style or Enum.EasingStyle.Quart, dir or Enum.EasingDirection.Out), props)
-	tw:Play()
-	return tw
-end
-
 local function new(class, props, parent)
-	local i = Instance.new(class)
-	for k, v in pairs(props or {}) do i[k] = v end
-	if parent then i.Parent = parent end
-	return i
+	local inst = Instance.new(class)
+	for k, v in pairs(props or {}) do inst[k] = v end
+	if parent then inst.Parent = parent end
+	return inst
 end
 
-local function corner(p, r) return new("UICorner", {CornerRadius = UDim.new(0, r or RADIUS)}, p) end
-local function stroke(p, c, t, th) return new("UIStroke", {Color = c or THEME.Border, Transparency = t or 0.5, Thickness = th or 1}, p) end
-local function pad(p, t, r, b, l) return new("UIPadding", {PaddingTop=UDim.new(0,t or 0), PaddingRight=UDim.new(0,r or 0), PaddingBottom=UDim.new(0,b or 0), PaddingLeft=UDim.new(0,l or 0)}, p) end
-local function list(p, gap, dir) return new("UIListLayout", {Padding=UDim.new(0,gap or 0), FillDirection=dir or Enum.FillDirection.Vertical, SortOrder=Enum.SortOrder.LayoutOrder}, p) end
-
--- Apply a horizontal gradient (indigo → purple) to a frame.
--- This gives us the closest thing to the mockup's gradient look.
-local function gradient(parent, c1, c2, rotation, transparency)
-	local g = new("UIGradient", {
-		Color = ColorSequence.new(c1, c2),
-		Rotation = rotation or 0,
-	})
-	if transparency then
-		g.Transparency = NumberSequence.new(transparency)
-	end
-	g.Parent = parent
-	return g
+local function corner(parent, r)
+	return new("UICorner", { CornerRadius = UDim.new(0, r) }, parent)
 end
 
--- Icon system using simple text glyphs (no external HTTP).
--- These are Unicode symbols that render reliably in Roblox.
-local GLYPHS = {
-	flame     = "♨",
-	user      = "◉",
-	eye       = "◎",
-	shield    = "⛨",
-	bolt      = "⚡",
-	target    = "◎",
-	settings  = "⚙",
-	search    = "⌕",
-	close     = "✕",
-	min       = "—",
-	chevron   = "▾",
-	check     = "✓",
-	arrow     = "›",
-	dot       = "●",
-	gear      = "⚙",
-	cog       = "⚙",
-	star      = "★",
-	heart     = "♥",
-	home      = "⌂",
-	folder    = "▣",
-	music     = "♪",
-	bell      = "♪",
-	lock      = "⚿",
-	zap       = "⚡",
-	fire      = "♨",
-	gem       = "◆",
-	box       = "▣",
-	plus      = "+",
-	minus     = "—",
-	clock     = "⧗",
-	timer     = "⧗",
-}
+local function stroke(parent, color, transparency, thickness)
+	return new("UIStroke", {
+		Color = color or Color3.fromRGB(255, 255, 255),
+		Transparency = transparency or 0.94,
+		Thickness = thickness or 1,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+	}, parent)
+end
 
--- Lucide-style icon asset IDs (community-uploaded, no dev account needed)
-local LUCIDE = {
-	bolt    = "rbxassetid://10734950309",  -- lightning bolt → Main
-	user    = "rbxassetid://10747373183",  -- person → Player (spec)
-	eye     = "rbxassetid://10723345518",  -- eye → Visuals (spec)
-	shield  = "rbxassetid://10723346957",  -- shield → Protect
-	flame   = "rbxassetid://10734898355",
-	target  = "rbxassetid://10734977449",
-	chevron = "rbxassetid://10734894900",
-	arrow   = "rbxassetid://10734895698",
-	search  = "rbxassetid://9723793096",   -- spec
-	cog     = "rbxassetid://10734924532",
-	x       = "rbxassetid://10747375965",
-	minus   = "rbxassetid://10734916534",
+local function pad(parent, top, right, bottom, left)
+	return new("UIPadding", {
+		PaddingTop    = UDim.new(0, top    or 0),
+		PaddingRight  = UDim.new(0, right  or 0),
+		PaddingBottom = UDim.new(0, bottom or 0),
+		PaddingLeft   = UDim.new(0, left   or 0),
+	}, parent)
+end
+
+local function listV(parent, gap)
+	return new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Vertical,
+		Padding = UDim.new(0, gap or 0),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, parent)
+end
+
+local function listH(parent, gap, vAlign, hAlign)
+	return new("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, gap or 0),
+		VerticalAlignment = vAlign or Enum.VerticalAlignment.Center,
+		HorizontalAlignment = hAlign or Enum.HorizontalAlignment.Left,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, parent)
+end
+
+-- White at low alpha simulates rgba(255,255,255,X) over the dark bg
+-- (Roblox transparency is INVERTED: 0 = opaque, 1 = invisible)
+local function whiteAlpha(alpha) return 1 - alpha end
+
+--==============================================================
+-- COLORS (from HTML)
+--==============================================================
+local COLOR = {
+	-- bg
+	BgDeep         = Color3.fromRGB(14, 14, 16),    -- #0e0e10 main panel
+	BgRoot         = Color3.fromRGB(6, 6, 10),      -- body bg (we don't really need this)
+	-- text
+	TextPrimary    = Color3.fromRGB(255, 255, 255), -- pure white
+	TextMuted      = Color3.fromRGB(255, 255, 255), -- white but rendered with TextTransparency
+	-- accents
+	Success        = Color3.fromRGB(52, 211, 153),  -- #34d399 status dot
+	-- knob colors
+	KnobOff        = Color3.fromRGB(255, 255, 255), -- white at 0.45 alpha
+	KnobOn         = Color3.fromRGB(24, 24, 26),    -- #18181a dark knob when on
 }
 
 --==============================================================
--- PUBLIC API
+-- ROOT SCREEN GUI
 --==============================================================
-function VaenHub:CreateWindow(cfg)
-	cfg = cfg or {}
-	local win = setmetatable({
-		_config = cfg,
-		_tabs = {},
-		_elements = {},
-		_connections = {},
-		_unloadHooks = {},
-		_hidden = false,
-		_minimised = false,
-		_keybinds = cfg.Keybinds or {Toggle = "K"},
-		_protect = cfg.Protect or {},
-		_configSave = cfg.Config or {},
-		_name = cfg.Name or "VaenHub",
-		_version = cfg.Version or "v3.7",
-		_currentTab = nil,
-		_tabOrder = 0,
-	}, {__index = Window})
+local existing = (CoreGui:FindFirstChild("ExampleHub_Shell"))
+if existing then existing:Destroy() end
 
-	if cfg.KeySystem and cfg.KeySystem.Enabled then
-		local ok = self:_RunKeySystem(win, cfg.KeySystem)
-		if not ok then return nil end
+local gui = new("ScreenGui", {
+	Name = "ExampleHub_Shell",
+	ResetOnSpawn = false,
+	IgnoreGuiInset = true,
+	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+})
+pcall(function() gui.Parent = CoreGui end)
+if not gui.Parent then gui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+
+--==============================================================
+-- WINDOW WRAPPER
+-- HTML: max-width 700px, border-radius 16px, bg #0e0e10
+-- Body uses radial gradient + shadow underneath
+--==============================================================
+local WINDOW_W, WINDOW_H = 700, 460
+
+local window = new("Frame", {
+	Name = "Window",
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromOffset(WINDOW_W, WINDOW_H),
+	BackgroundColor3 = COLOR.BgDeep,
+	BorderSizePixel = 0,
+	ClipsDescendants = true,
+}, gui)
+corner(window, 16)
+
+-- inset 1px white stroke at 0.05 alpha (HTML: inset 0 0 0 1px rgba(255,255,255,0.05))
+stroke(window, Color3.fromRGB(255,255,255), whiteAlpha(0.05), 1)
+
+-- Subtle radial-glow simulations (two overlays). Roblox has no radial gradient,
+-- so we layer two ImageLabels with a soft white circular gradient asset.
+-- Asset ID 4998051433 is a known soft circle glow used widely; if your executor
+-- can't load it the overlays just won't show — base bg still looks correct.
+local glowAsset = "rbxassetid://4998051433"
+
+new("ImageLabel", {
+	Name = "GlowTopLeft",
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.20, -0.10),
+	Size = UDim2.fromOffset(700, 700),
+	BackgroundTransparency = 1,
+	Image = glowAsset,
+	ImageColor3 = Color3.fromRGB(255, 255, 255),
+	ImageTransparency = whiteAlpha(0.03),
+	ZIndex = 1,
+}, window)
+
+new("ImageLabel", {
+	Name = "GlowBottomRight",
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(1.0, 1.1),
+	Size = UDim2.fromOffset(600, 600),
+	BackgroundTransparency = 1,
+	Image = glowAsset,
+	ImageColor3 = Color3.fromRGB(255, 255, 255),
+	ImageTransparency = whiteAlpha(0.02),
+	ZIndex = 1,
+}, window)
+
+--==============================================================
+-- TITLEBAR
+-- HTML: padding 12px 16px, flex space-between, border-bottom 1px rgba white 0.05
+--==============================================================
+local TITLEBAR_H = 48
+
+local titlebar = new("Frame", {
+	Name = "Titlebar",
+	Size = UDim2.new(1, 0, 0, TITLEBAR_H),
+	BackgroundTransparency = 1,
+	ZIndex = 2,
+}, window)
+
+-- bottom border line (1px)
+new("Frame", {
+	Name = "TitlebarDivider",
+	AnchorPoint = Vector2.new(0, 1),
+	Position = UDim2.new(0, 0, 1, 0),
+	Size = UDim2.new(1, 0, 0, 1),
+	BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+	BackgroundTransparency = whiteAlpha(0.05),
+	BorderSizePixel = 0,
+	ZIndex = 2,
+}, titlebar)
+
+-- LEFT SIDE: E logo + "Example" + "v1.0" badge
+local titleLeft = new("Frame", {
+	Name = "TitleLeft",
+	AnchorPoint = Vector2.new(0, 0.5),
+	Position = UDim2.new(0, 16, 0.5, 0),
+	Size = UDim2.new(0.6, 0, 1, 0),
+	BackgroundTransparency = 1,
+	ZIndex = 2,
+}, titlebar)
+listH(titleLeft, 10)
+
+-- "E" Logo square
+local logoBox = new("Frame", {
+	Name = "Logo",
+	Size = UDim2.fromOffset(28, 28),
+	BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+	BackgroundTransparency = whiteAlpha(0.06),
+	BorderSizePixel = 0,
+	LayoutOrder = 1,
+	ZIndex = 2,
+}, titleLeft)
+corner(logoBox, 7)
+stroke(logoBox, Color3.fromRGB(255,255,255), whiteAlpha(0.10), 1)
+new("TextLabel", {
+	Size = UDim2.fromScale(1, 1),
+	BackgroundTransparency = 1,
+	Text = "E",
+	Font = Enum.Font.GothamBold,
+	TextSize = 14,
+	TextColor3 = COLOR.TextPrimary,
+	TextXAlignment = Enum.TextXAlignment.Center,
+	TextYAlignment = Enum.TextYAlignment.Center,
+	ZIndex = 3,
+}, logoBox)
+
+-- "Example" title text
+new("TextLabel", {
+	Name = "Title",
+	Size = UDim2.fromOffset(70, 28),
+	BackgroundTransparency = 1,
+	Text = "Example",
+	Font = Enum.Font.GothamMedium,
+	TextSize = 14,
+	TextColor3 = COLOR.TextPrimary,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextYAlignment = Enum.TextYAlignment.Center,
+	LayoutOrder = 2,
+	ZIndex = 2,
+}, titleLeft)
+
+-- "v1.0" pill badge
+local badge = new("Frame", {
+	Name = "VersionBadge",
+	Size = UDim2.fromOffset(42, 18),
+	BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+	BackgroundTransparency = whiteAlpha(0.05),
+	BorderSizePixel = 0,
+	LayoutOrder = 3,
+	ZIndex = 2,
+}, titleLeft)
+corner(badge, 9)
+stroke(badge, Color3.fromRGB(255,255,255), whiteAlpha(0.08), 1)
+new("TextLabel", {
+	Size = UDim2.fromScale(1, 1),
+	BackgroundTransparency = 1,
+	Text = "v1.0",
+	Font = Enum.Font.GothamMedium,
+	TextSize = 10,
+	TextColor3 = Color3.fromRGB(255, 255, 255),
+	TextTransparency = whiteAlpha(0.55),
+	TextXAlignment = Enum.TextXAlignment.Center,
+	TextYAlignment = Enum.TextYAlignment.Center,
+	ZIndex = 3,
+}, badge)
+
+-- RIGHT SIDE: 4 icon buttons (search/settings/min/close)
+local titleRight = new("Frame", {
+	Name = "TitleRight",
+	AnchorPoint = Vector2.new(1, 0.5),
+	Position = UDim2.new(1, -12, 0.5, 0),
+	Size = UDim2.fromOffset(120, 28),
+	BackgroundTransparency = 1,
+	ZIndex = 2,
+}, titlebar)
+listH(titleRight, 1, Enum.VerticalAlignment.Center, Enum.HorizontalAlignment.Right)
+
+local function iconbtn(name, order)
+	-- HTML: 28x28, border-radius 7px, transparent bg, hover bg rgba white 0.06
+	local b = new("TextButton", {
+		Name = name,
+		Size = UDim2.fromOffset(28, 28),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Text = "",
+		AutoButtonColor = false,
+		LayoutOrder = order,
+		ZIndex = 2,
+	}, titleRight)
+	corner(b, 7)
+
+	-- placeholder icon: empty ImageLabel — you'll inject real Tabler asset later
+	new("ImageLabel", {
+		Name = "Icon",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(14, 14),
+		BackgroundTransparency = 1,
+		Image = "",  -- ← inject Tabler asset ID here
+		ImageColor3 = Color3.fromRGB(255, 255, 255),
+		ImageTransparency = whiteAlpha(0.5),
+		ZIndex = 3,
+	}, b)
+
+	return b
+end
+
+iconbtn("SearchBtn",   1)
+iconbtn("SettingsBtn", 2)
+iconbtn("MinimizeBtn", 3)
+iconbtn("CloseBtn",    4)
+
+--==============================================================
+-- BODY (sidebar + content, side-by-side)
+-- HTML: position relative, display flex
+--==============================================================
+local body = new("Frame", {
+	Name = "Body",
+	Position = UDim2.fromOffset(0, TITLEBAR_H),
+	Size = UDim2.new(1, 0, 1, -TITLEBAR_H),
+	BackgroundTransparency = 1,
+	ZIndex = 2,
+}, window)
+
+--==============================================================
+-- SIDEBAR (LEFT)
+-- HTML: width 150px, padding 14px 10px 12px, border-right 1px white 0.05
+--==============================================================
+local SIDEBAR_W = 150
+
+local sidebar = new("Frame", {
+	Name = "Sidebar",
+	Size = UDim2.new(0, SIDEBAR_W, 1, 0),
+	BackgroundTransparency = 1,
+	ZIndex = 2,
+}, body)
+pad(sidebar, 14, 10, 12, 10)
+
+-- right border line
+new("Frame", {
+	Name = "SidebarDivider",
+	AnchorPoint = Vector2.new(1, 0),
+	Position = UDim2.new(1, 0, 0, 0),
+	Size = UDim2.new(0, 1, 1, 0),
+	BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+	BackgroundTransparency = whiteAlpha(0.05),
+	BorderSizePixel = 0,
+	ZIndex = 2,
+}, sidebar)
+
+-- Sidebar layout: tabs on top, user info pinned to bottom
+local sidebarLayout = listV(sidebar, 0)
+sidebarLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+
+-- TAB LIST CONTAINER
+local tabList = new("Frame", {
+	Name = "TabList",
+	Size = UDim2.new(1, 0, 0, 0),
+	AutomaticSize = Enum.AutomaticSize.Y,
+	BackgroundTransparency = 1,
+	LayoutOrder = 1,
+	ZIndex = 2,
+}, sidebar)
+listV(tabList, 2)
+
+-- TAB FACTORY
+-- HTML: padding 8px 11px, border-radius 8px, font 12px weight 500, gap 10px
+-- active: bg rgba white 0.06, border 1px white 0.08, color white
+-- inactive: transparent, color rgba white 0.5
+local function makeTab(name, active, layoutOrder)
+	local t = new("TextButton", {
+		Name = "Tab_" .. name,
+		Size = UDim2.new(1, 0, 0, 32),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundTransparency = active and whiteAlpha(0.06) or 1,
+		BorderSizePixel = 0,
+		Text = "",
+		AutoButtonColor = false,
+		LayoutOrder = layoutOrder,
+		ZIndex = 2,
+	}, tabList)
+	corner(t, 8)
+	if active then
+		stroke(t, Color3.fromRGB(255,255,255), whiteAlpha(0.08), 1)
 	end
 
-	self:_BuildWindow(win)
-	if win._protect then win:Protect(win._protect) end
-	if win._configSave.Enabled then
-		task.delay(0.5, function() win:LoadConfig() end)
-	end
+	-- icon placeholder (14x14, 11px left padding, vertically centered)
+	new("ImageLabel", {
+		Name = "Icon",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 11, 0.5, 0),
+		Size = UDim2.fromOffset(14, 14),
+		BackgroundTransparency = 1,
+		Image = "",  -- ← inject Tabler icon asset later
+		ImageColor3 = Color3.fromRGB(255, 255, 255),
+		ImageTransparency = active and 0 or whiteAlpha(0.5),
+		ZIndex = 3,
+	}, t)
 
-	table.insert(self.Windows, win)
-	return win
-end
+	-- label (gap 10 between icon and text per HTML)
+	new("TextLabel", {
+		Name = "Label",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 11 + 14 + 10, 0.5, 0),
+		Size = UDim2.new(1, -(11 + 14 + 10 + 11), 1, 0),
+		BackgroundTransparency = 1,
+		Text = name,
+		Font = Enum.Font.GothamMedium,
+		TextSize = 12,
+		TextColor3 = Color3.fromRGB(255, 255, 255),
+		TextTransparency = active and 0 or whiteAlpha(0.5),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Center,
+		ZIndex = 3,
+	}, t)
 
-function VaenHub:Notify(d)
-	d = d or {}
-	self:_QueueNotif({
-		Title = d.Title or "Notification",
-		Content = d.Content or "",
-		Duration = d.Duration or 5,
-		Type = d.Type or "default",
-	})
-end
-
-function VaenHub:Get(flag) return self.Flags[flag] end
-
-function VaenHub:Destroy()
-	for _, w in ipairs(self.Windows) do pcall(function() w:Destroy() end) end
-	self.Windows = {}
-	self.Flags = {}
-end
-
---==============================================================
--- WINDOW METHODS
---==============================================================
-function Window:Tab(name, iconName)
-	local t = setmetatable({
-		_name = name,
-		_icon = iconName,
-		_window = self,
-		_elements = {},
-		_elemOrder = 0,
-	}, {__index = Tab})
-	VaenHub:_BuildTab(self, t)
-	table.insert(self._tabs, t)
-	if #self._tabs == 1 then self:_SelectTab(t) end
 	return t
 end
 
-function Window:Protect(opts)
-	opts = opts or {}
-	if opts.HideUI     then VaenHub:_HideFromCoreGui(self) end
-	if opts.AntiAFK    then VaenHub:_AntiAFK(self) end
-	if opts.AntiKick   then VaenHub:_AntiKick(self) end
-	if opts.AntiLag    then VaenHub:_AntiLag(self) end
-	if opts.AutoRejoin then VaenHub:_AutoRejoin(self) end
-	if opts.ServerHop and opts.ServerHop.Enabled then VaenHub:_ServerHop(self, opts.ServerHop) end
-end
+makeTab("Main",    true,  1)
+makeTab("Player",  false, 2)
+makeTab("Visuals", false, 3)
+makeTab("Protect", false, 4)
 
-function Window:OnUnload(cb) table.insert(self._unloadHooks, cb) end
-function Window:SaveConfig(p) VaenHub:_SaveConfig(self, p or "default") end
-function Window:LoadConfig(p) VaenHub:_LoadConfig(self, p or "default") end
+-- USER INFO (pinned to bottom of sidebar)
+-- HTML: margin-top auto, padding-top 12, border-top 1px white 0.05, gap 9
+-- (UIListLayout can't do margin-top: auto, so absolute-position to bottom)
+local userInfo = new("Frame", {
+	Name = "UserInfo",
+	AnchorPoint = Vector2.new(0, 1),
+	Position = UDim2.new(0, 10, 1, -12),
+	Size = UDim2.new(1, -20, 0, 42),
+	BackgroundTransparency = 1,
+	ZIndex = 3,
+}, sidebar)
 
-function Window:Hide()
-	self._hidden = true
-	tween(self._main, 0.3, {Size = UDim2.fromOffset(WINDOW_W, 0)}, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
-end
-function Window:Show()
-	self._hidden = false
-	tween(self._main, 0.4, {Size = UDim2.fromOffset(WINDOW_W, WINDOW_H)})
-end
-function Window:Toggle() if self._hidden then self:Show() else self:Hide() end end
+-- top border (1px) above user info
+new("Frame", {
+	Size = UDim2.new(1, 0, 0, 1),
+	Position = UDim2.fromOffset(0, -10),
+	BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+	BackgroundTransparency = whiteAlpha(0.05),
+	BorderSizePixel = 0,
+	ZIndex = 3,
+}, userInfo)
 
-function Window:Minimise()
-	self._minimised = not self._minimised
-	if self._minimised then
-		self._content.Visible = false
-		self._tabBar.Visible = false
-		tween(self._main, 0.3, {Size = UDim2.fromOffset(WINDOW_W, TOPBAR_H)})
-	else
-		tween(self._main, 0.3, {Size = UDim2.fromOffset(WINDOW_W, WINDOW_H)})
-		task.wait(0.2)
-		self._content.Visible = true
-		self._tabBar.Visible = true
-	end
-end
+listH(userInfo, 9)
 
-function Window:Destroy()
-	for _, h in ipairs(self._unloadHooks) do pcall(h) end
-	for _, c in ipairs(self._connections) do pcall(function() c:Disconnect() end) end
-	if self._gui then pcall(function() self._gui:Destroy() end) end
-end
+-- Avatar 30x30 with rounded square, pulled via GetUserThumbnailAsync
+local avatarBox = new("Frame", {
+	Name = "AvatarBox",
+	Size = UDim2.fromOffset(30, 30),
+	BackgroundColor3 = Color3.fromRGB(42, 42, 46),
+	BorderSizePixel = 0,
+	LayoutOrder = 1,
+	ZIndex = 3,
+}, userInfo)
+corner(avatarBox, 7)
+local avatar = new("ImageLabel", {
+	Name = "Avatar",
+	Size = UDim2.fromScale(1, 1),
+	BackgroundTransparency = 1,
+	Image = "",
+	ZIndex = 3,
+}, avatarBox)
+corner(avatar, 7)
 
-function Window:_SelectTab(tab)
-	local isInitial = (self._currentTab == nil)
-	local function tintIcon(elt, color, instant)
-		if not elt then return end
-		if elt:IsA("ImageLabel") then
-			if instant then elt.ImageColor3 = color else tween(elt, 0.15, {ImageColor3 = color}, Enum.EasingStyle.Quad) end
-		else
-			if instant then elt.TextColor3 = color else tween(elt, 0.15, {TextColor3 = color}, Enum.EasingStyle.Quad) end
-		end
-	end
-	for _, t in ipairs(self._tabs) do
-		local sel = (t == tab)
-		t._page.Visible = sel
-		local fg = sel and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(140, 140, 155)
-		local bgT = sel and 0 or 1
-		if sel then
-			t._button.BackgroundColor3 = Color3.fromRGB(38, 32, 64)
-		end
-		if isInitial then
-			t._button.BackgroundTransparency = bgT
-			t._buttonLabel.TextColor3 = fg
-			tintIcon(t._buttonIcon, fg, true)
-			tintIcon(t._buttonGlyph, fg, true)
-		else
-			tween(t._button, 0.15, {BackgroundTransparency = bgT}, Enum.EasingStyle.Quad)
-			tween(t._buttonLabel, 0.15, {TextColor3 = fg}, Enum.EasingStyle.Quad)
-			tintIcon(t._buttonIcon, fg, false)
-			tintIcon(t._buttonGlyph, fg, false)
-		end
-	end
-	self._currentTab = tab
-end
-
---==============================================================
--- TAB METHODS
---==============================================================
-function Tab:Toggle(name)      return VaenHub:_NewElement(self, "Toggle", name) end
-function Tab:Slider(name)      return VaenHub:_NewElement(self, "Slider", name) end
-function Tab:Dropdown(name)    return VaenHub:_NewElement(self, "Dropdown", name) end
-function Tab:Button(name)      return VaenHub:_NewElement(self, "Button", name) end
-function Tab:Input(name)       return VaenHub:_NewElement(self, "Input", name) end
-function Tab:Keybind(name)     return VaenHub:_NewElement(self, "Keybind", name) end
-function Tab:ColorPicker(name) return VaenHub:_NewElement(self, "ColorPicker", name) end
-function Tab:Label(text)       return VaenHub:_NewElement(self, "Label", text) end
-function Tab:Paragraph(title)  return VaenHub:_NewElement(self, "Paragraph", title) end
-function Tab:Section(name)     return VaenHub:_NewElement(self, "Section", name) end
-function Tab:Status(name)      return VaenHub:_NewElement(self, "Status", name) end
-function Tab:Divider()         return VaenHub:_NewElement(self, "Divider", "") end
-
---==============================================================
--- CHAINABLE
---==============================================================
-function Elem:Default(v) self._default = v; self._current = v; return self end
-function Elem:Range(a,b) self._min, self._max = a, b; return self end
-function Elem:Increment(s) self._step = s; return self end
-function Elem:Suffix(s) self._suffix = s; return self end
-function Elem:Options(o) self._options = o; return self end
-function Elem:Multi(e) self._multi = e ~= false; return self end
-function Elem:Placeholder(p) self._placeholder = p; return self end
-function Elem:Icon(i) self._icon = i; return self end
-function Elem:Content(c) self._content = c; if self._setContent then self._setContent(c) end; return self end
-function Elem:Flag(f) self._flag = f; VaenHub.Flags[f] = self; return self end
-function Elem:OnChange(cb) self._callback = cb; if not self._built then VaenHub:_Build(self) end; return self end
-Elem.OnClick = Elem.OnChange
-function Elem:Build() if not self._built then VaenHub:_Build(self) end; return self end
-function Elem:Set(v)
-	self._current = v
-	if self._update then self._update(v) end
-	if self._callback then task.spawn(pcall, self._callback, v) end
-	return self
-end
-function Elem:Get() return self._current end
-function Elem:Refresh(o) self._options = o; if self._refresh then self._refresh() end; return self end
-
---==============================================================
--- PROTECTION
---==============================================================
-function VaenHub:_HideFromCoreGui(win)
-	if not win._gui then return end
-	win._gui.Name = HttpService:GenerateGUID(false):sub(1,8)
-	local done = false
-	if gethui then pcall(function() win._gui.Parent = gethui(); done = true end) end
-	if not done and syn and syn.protect_gui then pcall(function() syn.protect_gui(win._gui); win._gui.Parent = CoreGui; done = true end) end
-	if not done and protectgui then pcall(function() protectgui(win._gui); win._gui.Parent = CoreGui; done = true end) end
-	if not done then pcall(function() win._gui.Parent = CoreGui end) end
-end
-
-function VaenHub:_AntiAFK(win)
-	pcall(function()
-		local vu = svc("VirtualUser")
-		local c = LocalPlayer.Idled:Connect(function() vu:CaptureController(); vu:ClickButton2(Vector2.new()) end)
-		table.insert(win._connections, c)
+-- Fetch avatar thumbnail
+task.spawn(function()
+	local ok, content = pcall(function()
+		return Players:GetUserThumbnailAsync(
+			LocalPlayer.UserId,
+			Enum.ThumbnailType.HeadShot,
+			Enum.ThumbnailSize.Size60x60
+		)
 	end)
-end
+	if ok and content then avatar.Image = content end
+end)
 
-function VaenHub:_AntiKick(win)
-	if not hookmetamethod then return end
-	pcall(function()
-		local old; old = hookmetamethod(game, "__namecall", function(s, ...)
-			local m = getnamecallmethod()
-			if (m == "Kick" or m == "kick") and s == LocalPlayer then return nil end
-			return old(s, ...)
-		end)
-	end)
-end
+-- User name + handle text block
+local userText = new("Frame", {
+	Name = "UserText",
+	Size = UDim2.new(1, -40, 1, 0),
+	BackgroundTransparency = 1,
+	LayoutOrder = 2,
+	ZIndex = 3,
+}, userInfo)
 
-function VaenHub:_AntiLag(win)
-	pcall(function()
-		settings().Rendering.QualityLevel = 1
-		Lighting.GlobalShadows = false
-		Lighting.FogEnd = 1e10
-	end)
-end
+new("TextLabel", {
+	Name = "UserName",
+	Size = UDim2.new(1, 0, 0.5, 0),
+	BackgroundTransparency = 1,
+	Text = LocalPlayer.DisplayName or "RobloxUser",
+	Font = Enum.Font.GothamMedium,
+	TextSize = 11,
+	TextColor3 = Color3.fromRGB(255, 255, 255),
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextYAlignment = Enum.TextYAlignment.Bottom,
+	TextTruncate = Enum.TextTruncate.AtEnd,
+	ZIndex = 3,
+}, userText)
 
-function VaenHub:_AutoRejoin(win)
-	local pid, jid = game.PlaceId, game.JobId
-	local c = GuiService.ErrorMessageChanged:Connect(function(msg)
-		if msg and msg ~= "" then
-			task.wait(2)
-			pcall(function() TeleportService:TeleportToPlaceInstance(pid, jid, LocalPlayer) end)
-		end
-	end)
-	table.insert(win._connections, c)
-end
-
-function VaenHub:_ServerHop(win, opts)
-	win._serverHop = function()
-		local req = (syn and syn.request) or http_request or request
-		if not req then return false end
-		local ok, resp = pcall(function() return req({Url="https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100", Method="GET"}) end)
-		if not ok or not resp then return false end
-		local data = HttpService:JSONDecode(resp.Body)
-		if not data or not data.data then return false end
-		local list = {}
-		for _, s in ipairs(data.data) do
-			if s.id ~= game.JobId and s.playing < s.maxPlayers then table.insert(list, s) end
-		end
-		if #list == 0 then return false end
-		if opts.PreferLow then table.sort(list, function(a,b) return a.playing < b.playing end) end
-		TeleportService:TeleportToPlaceInstance(game.PlaceId, list[1].id, LocalPlayer)
-		return true
-	end
-end
+new("TextLabel", {
+	Name = "UserHandle",
+	Position = UDim2.fromScale(0, 0.5),
+	Size = UDim2.new(1, 0, 0.5, 0),
+	BackgroundTransparency = 1,
+	Text = "@" .. (LocalPlayer.Name or "RobloxUser"),
+	Font = Enum.Font.Gotham,
+	TextSize = 10,
+	TextColor3 = Color3.fromRGB(255, 255, 255),
+	TextTransparency = whiteAlpha(0.4),
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextYAlignment = Enum.TextYAlignment.Top,
+	TextTruncate = Enum.TextTruncate.AtEnd,
+	ZIndex = 3,
+}, userText)
 
 --==============================================================
--- KEY SYSTEM
+-- CONTENT (RIGHT)
+-- HTML: flex 1, padding 14px 18px 18px
 --==============================================================
-function VaenHub:_RunKeySystem(win, ks)
-	if ks.SaveKey and isfile then
-		local p = "VaenHub/Keys/"..(ks.FileName or "key")..".key"
-		if isfile(p) then
-			local ok, saved = pcall(readfile, p)
-			if ok then
-				for _, k in ipairs(ks.Keys or {}) do
-					if saved == k then return true end
-				end
-			end
-		end
-	end
+local content = new("Frame", {
+	Name = "Content",
+	Position = UDim2.fromOffset(SIDEBAR_W, 0),
+	Size = UDim2.new(1, -SIDEBAR_W, 1, 0),
+	BackgroundTransparency = 1,
+	ZIndex = 2,
+}, body)
+pad(content, 14, 18, 18, 18)
 
-	local gui = new("ScreenGui", {
-		Name = HttpService:GenerateGUID(false):sub(1,8),
-		IgnoreGuiInset = true, ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-		DisplayOrder = 999, ResetOnSpawn = false,
-	})
-	if gethui then gui.Parent = gethui()
-	elseif syn and syn.protect_gui then syn.protect_gui(gui); gui.Parent = CoreGui
-	else gui.Parent = CoreGui end
+-- Section header bar: title left, "more" dots right, bottom border
+local sectionHead = new("Frame", {
+	Name = "SectionHead",
+	Size = UDim2.new(1, 0, 0, 30),
+	BackgroundTransparency = 1,
+	LayoutOrder = 1,
+	ZIndex = 2,
+}, content)
 
-	local blur = new("BlurEffect", {Size = 0}, Lighting)
-	tween(blur, 0.5, {Size = 22})
+new("TextLabel", {
+	Name = "SectionTitle",
+	AnchorPoint = Vector2.new(0, 0.5),
+	Position = UDim2.new(0, 0, 0.5, -2),
+	Size = UDim2.new(0.5, 0, 0, 20),
+	BackgroundTransparency = 1,
+	Text = "Main",
+	Font = Enum.Font.GothamMedium,
+	TextSize = 14,
+	TextColor3 = COLOR.TextPrimary,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextYAlignment = Enum.TextYAlignment.Center,
+	ZIndex = 2,
+}, sectionHead)
 
-	local dim = new("Frame", {Size=UDim2.fromScale(1,1), BackgroundColor3=Color3.new(0,0,0), BackgroundTransparency=1, BorderSizePixel=0}, gui)
-	tween(dim, 0.4, {BackgroundTransparency = 0.55})
+-- dots-vertical placeholder
+new("ImageLabel", {
+	Name = "MoreDots",
+	AnchorPoint = Vector2.new(1, 0.5),
+	Position = UDim2.new(1, 0, 0.5, -2),
+	Size = UDim2.fromOffset(14, 14),
+	BackgroundTransparency = 1,
+	Image = "",
+	ImageColor3 = Color3.fromRGB(255,255,255),
+	ImageTransparency = whiteAlpha(0.35),
+	ZIndex = 2,
+}, sectionHead)
 
+-- bottom border of section head
+new("Frame", {
+	AnchorPoint = Vector2.new(0, 1),
+	Position = UDim2.new(0, 0, 1, 4),
+	Size = UDim2.new(1, 0, 0, 1),
+	BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+	BackgroundTransparency = whiteAlpha(0.04),
+	BorderSizePixel = 0,
+	ZIndex = 2,
+}, sectionHead)
+
+-- Panel area below section head
+local panel = new("Frame", {
+	Name = "Panel",
+	Position = UDim2.fromOffset(0, 36),
+	Size = UDim2.new(1, 0, 1, -36),
+	BackgroundTransparency = 1,
+	ZIndex = 2,
+}, content)
+local panelLayout = listV(panel, 8)
+
+--==============================================================
+-- ROW HELPERS — Cards used by elements
+-- HTML common: bg rgba white 0.025, border 1px white 0.06, radius 11px,
+--              padding 13px 14px
+--==============================================================
+local function makeCard(layoutOrder, height)
 	local card = new("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(420, 0),
-		BackgroundColor3 = THEME.Background,
-		BorderSizePixel = 0,
-		ClipsDescendants = true,
-	}, gui)
-	corner(card, 12)
-	stroke(card, Color3.fromRGB(255,255,255), 0.88)
-
-	-- Top accent bar with gradient
-	local accBar = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 2),
-		BackgroundColor3 = THEME.AccentStart,
-		BorderSizePixel = 0,
-		ZIndex = 3,
-	}, card)
-	gradient(accBar, THEME.AccentStart, THEME.AccentEnd, 0)
-
-	-- Logo box with gradient
-	local logo = new("Frame", {
-		Size = UDim2.fromOffset(28, 28),
-		Position = UDim2.fromOffset(20, 22),
-		BackgroundColor3 = THEME.AccentStart,
-		BorderSizePixel = 0,
-	}, card)
-	corner(logo, 7)
-	gradient(logo, THEME.AccentStart, THEME.AccentEnd, 135)
-	new("TextLabel", {
-		Size = UDim2.fromScale(1,1),
-		BackgroundTransparency = 1,
-		Text = "V",
-		Font = Enum.Font.GothamBold,
-		TextSize = 14,
-		TextColor3 = Color3.fromRGB(255,255,255),
-	}, logo)
-
-	local title = new("TextLabel", {
-		Size = UDim2.new(1, -90, 0, 22),
-		Position = UDim2.fromOffset(60, 20),
-		BackgroundTransparency = 1,
-		Text = ks.Title or win._name,
-		Font = Enum.Font.GothamBold,
-		TextSize = 15,
-		TextColor3 = THEME.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextTransparency = 1,
-	}, card)
-	local subt = new("TextLabel", {
-		Size = UDim2.new(1, -90, 0, 14),
-		Position = UDim2.fromOffset(60, 40),
-		BackgroundTransparency = 1,
-		Text = ks.Subtitle or "Authentication",
-		Font = Enum.Font.Gotham,
-		TextSize = 11,
-		TextColor3 = THEME.TextDim,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextTransparency = 1,
-	}, card)
-
-	local close = new("TextButton", {
-		Size = UDim2.fromOffset(28, 28),
-		Position = UDim2.new(1, -36, 0, 18),
-		BackgroundTransparency = 1,
-		Text = GLYPHS.close,
-		Font = Enum.Font.GothamBold,
-		TextSize = 16,
-		TextColor3 = THEME.TextDim,
-		AutoButtonColor = false,
-	}, card)
-	close.MouseEnter:Connect(function() tween(close, 0.15, {TextColor3 = THEME.Text}) end)
-	close.MouseLeave:Connect(function() tween(close, 0.15, {TextColor3 = THEME.TextDim}) end)
-
-	local note = new("TextLabel", {
-		Size = UDim2.new(1, -40, 0, 32),
-		Position = UDim2.fromOffset(20, 76),
-		BackgroundTransparency = 1,
-		Text = ks.Note or "Enter your access key below.",
-		Font = Enum.Font.Gotham,
-		TextSize = 12,
-		TextColor3 = THEME.TextDim,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextWrapped = true,
-		TextTransparency = 1,
-	}, card)
-
-	local ifr = new("Frame", {
-		Size = UDim2.new(1, -40, 0, 38),
-		Position = UDim2.fromOffset(20, 120),
-		BackgroundColor3 = THEME.ElementBg,
-		BorderSizePixel = 0,
-	}, card)
-	corner(ifr, 8)
-	local ist = stroke(ifr, THEME.Border, 0.5)
-
-	local ibox = new("TextBox", {
-		Size = UDim2.new(1, -24, 1, 0),
-		Position = UDim2.fromOffset(12, 0),
-		BackgroundTransparency = 1,
-		Text = "",
-		PlaceholderText = "Enter key...",
-		PlaceholderColor3 = THEME.TextFaint,
-		Font = Enum.Font.Gotham,
-		TextSize = 13,
-		TextColor3 = THEME.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		ClearTextOnFocus = false,
-	}, ifr)
-	ibox.Focused:Connect(function() tween(ist, 0.2, {Color = THEME.AccentEnd, Transparency = 0.3}) end)
-	ibox.FocusLost:Connect(function() tween(ist, 0.2, {Color = THEME.Border, Transparency = 0.5}) end)
-
-	-- Verify button (with gradient!)
-	local verify = new("Frame", {
-		Size = UDim2.new(1, -40, 0, 38),
-		Position = UDim2.fromOffset(20, 170),
-		BackgroundColor3 = THEME.AccentStart,
-		BorderSizePixel = 0,
-	}, card)
-	corner(verify, 8)
-	gradient(verify, THEME.AccentStart, THEME.AccentEnd, 90)
-
-	local verifyLbl = new("TextLabel", {
-		Size = UDim2.fromScale(1,1),
-		BackgroundTransparency = 1,
-		Text = "Verify",
-		Font = Enum.Font.GothamMedium,
-		TextSize = 13,
-		TextColor3 = Color3.fromRGB(255,255,255),
-	}, verify)
-
-	local verifyBtn = new("TextButton", {
-		Size = UDim2.fromScale(1,1),
-		BackgroundTransparency = 1,
-		Text = "",
-		AutoButtonColor = false,
-	}, verify)
-
-	verifyBtn.MouseEnter:Connect(function() tween(verify, 0.15, {Size = UDim2.new(1, -36, 0, 38)}) end)
-	verifyBtn.MouseLeave:Connect(function() tween(verify, 0.15, {Size = UDim2.new(1, -40, 0, 38)}) end)
-
-	tween(card, 0.45, {Size = UDim2.fromOffset(420, 230)})
-	task.wait(0.2)
-	tween(title, 0.3, {TextTransparency = 0}); task.wait(0.04)
-	tween(subt, 0.3, {TextTransparency = 0}); task.wait(0.04)
-	tween(note, 0.3, {TextTransparency = 0})
-
-	local result, attempts = nil, ks.MaxAttempts or 5
-	local function doVerify()
-		for _, k in ipairs(ks.Keys or {}) do
-			if ibox.Text == k then
-				if ks.SaveKey and writefile then
-					pcall(function()
-						if not isfolder("VaenHub") then makefolder("VaenHub") end
-						if not isfolder("VaenHub/Keys") then makefolder("VaenHub/Keys") end
-						writefile("VaenHub/Keys/"..(ks.FileName or "key")..".key", ibox.Text)
-					end)
-				end
-				result = true; return
-			end
-		end
-		attempts = attempts - 1
-		local op = card.Position
-		for _ = 1, 3 do
-			card.Position = op + UDim2.fromOffset(7, 0); task.wait(0.04)
-			card.Position = op + UDim2.fromOffset(-7, 0); task.wait(0.04)
-		end
-		card.Position = op
-		tween(ist, 0.2, {Color = THEME.Danger, Transparency = 0.3})
-		task.wait(0.5)
-		tween(ist, 0.2, {Color = THEME.Border, Transparency = 0.5})
-		ibox.Text = ""
-		if attempts <= 0 then result = false end
-	end
-
-	verifyBtn.MouseButton1Click:Connect(doVerify)
-	ibox.FocusLost:Connect(function(enter) if enter then doVerify() end end)
-	close.MouseButton1Click:Connect(function() result = false end)
-
-	while result == nil do task.wait() end
-
-	tween(blur, 0.3, {Size = 0})
-	tween(dim, 0.3, {BackgroundTransparency = 1})
-	tween(card, 0.3, {Size = UDim2.fromOffset(420, 0)}, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
-	task.wait(0.35)
-	pcall(function() blur:Destroy() end)
-	gui:Destroy()
-	return result
-end
-
---==============================================================
--- WINDOW BUILDER
---==============================================================
-function VaenHub:_BuildWindow(win)
-	local gui = new("ScreenGui", {
-		Name = "VaenHub_"..HttpService:GenerateGUID(false):sub(1,6),
-		IgnoreGuiInset = true,
-		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-		ResetOnSpawn = false,
-		DisplayOrder = 100,
-	})
-	win._gui = gui
-	if not (win._protect and win._protect.HideUI) then
-		gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-	end
-
-	local main = new("Frame", {
-		Name = "Main",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(WINDOW_W, WINDOW_H),
+		Name = "Card",
+		Size = UDim2.new(1, 0, 0, height or 56),
 		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundTransparency = whiteAlpha(0.025),
 		BorderSizePixel = 0,
-		ClipsDescendants = true,
-		ZIndex = 1,
-	}, gui)
-	corner(main, 8)
-	stroke(main, Color3.fromRGB(255,255,255), 0.9)
-
-	-- Single shared 45deg UIGradient
-	new("UIGradient", {
-		Color = ColorSequence.new(Color3.fromRGB(26, 21, 48), Color3.fromRGB(10, 8, 18)),
-		Rotation = 45,
-	}, main)
-
-	win._main = main
-
-	-- VaenHub V watermark (subtle background mark)
-	new("TextLabel", {
-		Size = UDim2.fromOffset(320, 320),
-		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, 40, 1, 40),
-		BackgroundTransparency = 1,
-		Text = "V",
-		Font = Enum.Font.GothamBold,
-		TextSize = 320,
-		TextColor3 = Color3.fromRGB(255, 255, 255),
-		TextTransparency = 0.95,
-		TextXAlignment = Enum.TextXAlignment.Right,
-		TextYAlignment = Enum.TextYAlignment.Bottom,
-		ZIndex = 1,
-	}, main)
-
-	-- TOPBAR
-	local topbar = new("Frame", {
-		Name = "Topbar",
-		Size = UDim2.new(1, 0, 0, TOPBAR_H),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
+		LayoutOrder = layoutOrder,
 		ZIndex = 2,
-	}, main)
-	win._topbar = topbar
-
-	new("Frame", {
-		Size = UDim2.new(1, 0, 0, 1),
-		Position = UDim2.new(0, 0, 1, -1),
-		BackgroundColor3 = Color3.fromRGB(255,255,255),
-		BackgroundTransparency = 0.93,
-		BorderSizePixel = 0,
-	}, topbar)
-
-	-- Logo with gradient
-	local logoBox = new("Frame", {
-		Size = UDim2.fromOffset(26, 26),
-		Position = UDim2.fromOffset(14, 9),
-		BackgroundColor3 = THEME.AccentStart,
-		BorderSizePixel = 0,
-	}, topbar)
-	corner(logoBox, 6)
-	gradient(logoBox, THEME.AccentStart, THEME.AccentEnd, 135)
-
-	new("TextLabel", {
-		Size = UDim2.fromScale(1,1),
-		BackgroundTransparency = 1,
-		Text = (win._name):sub(1,1):upper(),
-		Font = Enum.Font.GothamBold,
-		TextSize = 13,
-		TextColor3 = Color3.fromRGB(255,255,255),
-	}, logoBox)
-
-	local title = new("TextLabel", {
-		AutomaticSize = Enum.AutomaticSize.X,
-		Size = UDim2.new(0, 0, 0, 22),
-		Position = UDim2.fromOffset(48, 11),
-		BackgroundTransparency = 1,
-		Text = win._name,
-		Font = Enum.Font.GothamMedium,
-		TextSize = 14,
-		TextColor3 = THEME.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-	}, topbar)
-
-	-- Version badge
-	local badge = new("Frame", {
-		Size = UDim2.fromOffset(38, 18),
-		Position = UDim2.fromOffset(0, 0),
-		AnchorPoint = Vector2.new(0, 0.5),
-		BackgroundColor3 = THEME.ElementBg,
-		BorderSizePixel = 0,
-		Visible = false,
-	}, topbar)
-	corner(badge, 4)
-	stroke(badge, THEME.Border, 0.6)
-	new("TextLabel", {
-		Size = UDim2.fromScale(1,1),
-		BackgroundTransparency = 1,
-		Text = win._version,
-		Font = Enum.Font.Gotham,
-		TextSize = 10,
-		TextColor3 = THEME.TextFaint,
-	}, badge)
-
-	task.defer(function()
-		task.wait(0.05)
-		badge.Position = UDim2.new(0, 48 + title.TextBounds.X + 8, 0.5, 0)
-		badge.Visible = true
-	end)
-
-	-- Topbar buttons — TextButton with clean text glyphs (guaranteed to render in Gotham).
-	-- Each button has its own full-size click area (no hitbox overlap).
-	local btnRow = new("Frame", {
-		Name = "BtnRow",
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -12, 0.5, 0),
-		Size = UDim2.fromOffset(140, 28),
-		BackgroundTransparency = 1,
-		ZIndex = 10,
-	}, topbar)
-
-	new("UIListLayout", {
-		FillDirection = Enum.FillDirection.Horizontal,
-		HorizontalAlignment = Enum.HorizontalAlignment.Right,
-		VerticalAlignment = Enum.VerticalAlignment.Center,
-		Padding = UDim.new(0, 10),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-	}, btnRow)
-
-	local function topBtn(name, glyph, glyphSize, layoutOrder)
-		-- Container Frame guarantees clean 28x28 hitbox
-		local container = new("Frame", {
-			Name = name,
-			Size = UDim2.fromOffset(28, 28),
-			BackgroundTransparency = 1,
-			LayoutOrder = layoutOrder,
-			ZIndex = 10,
-		}, btnRow)
-
-		local b = new("TextButton", {
-			Size = UDim2.fromScale(1, 1),
-			BackgroundTransparency = 1,
-			Text = glyph,
-			Font = Enum.Font.GothamBold,
-			TextSize = glyphSize,
-			TextXAlignment = Enum.TextXAlignment.Center,
-			TextYAlignment = Enum.TextYAlignment.Center,
-			TextColor3 = THEME.TextDim,
-			AutoButtonColor = false,
-			ZIndex = 11,
-		}, container)
-
-		b.MouseEnter:Connect(function() tween(b, 0.15, {TextColor3 = THEME.Text}, Enum.EasingStyle.Quad) end)
-		b.MouseLeave:Connect(function() tween(b, 0.15, {TextColor3 = THEME.TextDim}, Enum.EasingStyle.Quad) end)
-		return b
-	end
-
-	local function topImgBtn(name, assetId, layoutOrder)
-		local container = new("Frame", {
-			Name = name,
-			Size = UDim2.fromOffset(28, 28),
-			BackgroundTransparency = 1,
-			LayoutOrder = layoutOrder,
-			ZIndex = 10,
-		}, btnRow)
-
-		local b = new("ImageButton", {
-			Size = UDim2.fromOffset(18, 18),
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.5),
-			BackgroundTransparency = 1,
-			Image = assetId,
-			ImageColor3 = THEME.TextDim,
-			ScaleType = Enum.ScaleType.Fit,
-			AutoButtonColor = false,
-			ZIndex = 11,
-		}, container)
-
-		b.MouseEnter:Connect(function() tween(b, 0.15, {ImageColor3 = THEME.Text}, Enum.EasingStyle.Quad) end)
-		b.MouseLeave:Connect(function() tween(b, 0.15, {ImageColor3 = THEME.TextDim}, Enum.EasingStyle.Quad) end)
-		return b
-	end
-
-	-- Order left-to-right: Search, Settings, Min, Close
-	local searchBtn = topBtn("Search",   "Q", 14, 1)  -- text placeholder per spec fallback
-	local cogBtn    = topBtn("Settings", "⚙", 18, 2)
-	local miniBtn   = topBtn("Mini",     "–", 22, 3)
-	local closeBtn  = topBtn("Close",    "×", 22, 4)
-
-	closeBtn.MouseButton1Click:Connect(function() win:Destroy() end)
-	miniBtn.MouseButton1Click:Connect(function() win:Minimise() end)
-	searchBtn.MouseButton1Click:Connect(function() end)
-	cogBtn.MouseButton1Click:Connect(function() end)
-
-	-- TABBAR
-	local tabBar = new("Frame", {
-		Name = "TabBar",
-		Size = UDim2.new(1, 0, 0, TABBAR_H),
-		Position = UDim2.fromOffset(0, TOPBAR_H),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		ClipsDescendants = false,
-		ZIndex = 2,
-	}, main)
-	win._tabBar = tabBar
-
-	-- Bottom hairline goes on its OWN frame so UIListLayout doesn't touch it
-	local tabBarBottom = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 1),
-		Position = UDim2.new(0, 0, 1, -1),
-		BackgroundColor3 = Color3.fromRGB(255,255,255),
-		BackgroundTransparency = 0.93,
-		BorderSizePixel = 0,
-		ZIndex = 5,
-	}, main)  -- parent to main, not tabBar!
-	tabBarBottom.Position = UDim2.new(0, 0, 0, TOPBAR_H + TABBAR_H - 1)
-
-	-- UIListLayout on tabBar — this will arrange tab pills horizontally
-	local tbl = new("UIListLayout", {
-		FillDirection = Enum.FillDirection.Horizontal,
-		Padding = UDim.new(0, 6),
-		VerticalAlignment = Enum.VerticalAlignment.Center,
-		HorizontalAlignment = Enum.HorizontalAlignment.Left,
-		SortOrder = Enum.SortOrder.LayoutOrder,
-	}, tabBar)
-
-	local tabBarPad = new("UIPadding", {
-		PaddingLeft = UDim.new(0, 14),
-		PaddingRight = UDim.new(0, 14),
-	}, tabBar)
-
-	-- CONTENT
-	local content = new("Frame", {
-		Name = "Content",
-		Size = UDim2.new(1, 0, 1, -(TOPBAR_H + TABBAR_H)),
-		Position = UDim2.fromOffset(0, TOPBAR_H + TABBAR_H),
-		BackgroundTransparency = 1,
-		ZIndex = 2,
-	}, main)
-	win._content = content
-
-	self:_MakeDraggable(main, topbar)
-
-	local tkey = Enum.KeyCode[win._keybinds.Toggle] or Enum.KeyCode.K
-	local c = UserInputService.InputBegan:Connect(function(input, processed)
-		if processed then return end
-		if input.KeyCode == tkey then win:Toggle() end
-	end)
-	table.insert(win._connections, c)
+	}, panel)
+	corner(card, 11)
+	stroke(card, Color3.fromRGB(255,255,255), whiteAlpha(0.06), 1)
+	return card
 end
 
---==============================================================
--- TAB BUILDER (proper layoutorder, icons, gradient pill)
---==============================================================
-function VaenHub:_BuildTab(win, t)
-	win._tabOrder = win._tabOrder + 1
-
-	-- Calculate label width manually
-	local iconStrForWidth = tostring(t._icon or "")
-	local hasIcon = t._icon and (LUCIDE[iconStrForWidth] or GLYPHS[iconStrForWidth] or iconStrForWidth:match("^rbxasset") or iconStrForWidth:match("^%d+$"))
-	local approxTextWidth = #t._name * 7
-	local btnWidth = 24 + approxTextWidth + (hasIcon and 24 or 0)
-
-	-- Tab pill — INACTIVE by default (transparent). _SelectTab will set active state instantly.
-	local btn = new("Frame", {
-		Name = "Tab_" .. t._name,
-		Size = UDim2.fromOffset(btnWidth, 30),
-		BackgroundColor3 = Color3.fromRGB(38, 32, 64),
-		BackgroundTransparency = 1,
+-- icon-square placeholder (30x30 rounded, lighter bg, holds an ImageLabel for the icon)
+local function makeIconSquare(parent, size)
+	size = size or 30
+	local s = new("Frame", {
+		Name = "IconSquare",
+		Size = UDim2.fromOffset(size, size),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundTransparency = whiteAlpha(0.04),
 		BorderSizePixel = 0,
-		LayoutOrder = win._tabOrder,
-		Visible = true,
-		ClipsDescendants = false,
 		ZIndex = 3,
-	}, win._tabBar)
-	corner(btn, 6)
+	}, parent)
+	corner(s, 8)
+	stroke(s, Color3.fromRGB(255,255,255), whiteAlpha(0.07), 1)
 
-	-- No gradient overlay on tabs (keeps active fill solid violet per spec)
-	local btnStroke = nil
-
-	-- Tab icon resolution: LUCIDE asset IDs first (per spec), GLYPHS as fallback
-	local iconLbl
-	-- Tab icon resolution: stacked render — glyph fallback first (always visible),
-	-- ImageLabel on top (renders only if asset loads successfully)
-	local iconLbl
-	local glyphLbl
-	local labelX = 12
-	if t._icon then
-		local iconStr = tostring(t._icon)
-		local glyph = GLYPHS[iconStr]
-		local assetId = LUCIDE[iconStr]
-		if not assetId and (iconStr:match("^rbxasset") or iconStr:match("^rbxassetid") or iconStr:match("^%d+$")) then
-			assetId = (iconStr:match("^rbxasset") or iconStr:match("^rbxassetid")) and iconStr or ("rbxassetid://" .. iconStr)
-		end
-
-		if glyph or assetId then
-			-- Bottom layer: glyph (visible if image fails)
-			if glyph then
-				glyphLbl = new("TextLabel", {
-					AnchorPoint = Vector2.new(0, 0.5),
-					Size = UDim2.fromOffset(16, 28),
-					Position = UDim2.new(0, 12, 0.5, 0),
-					BackgroundTransparency = 1,
-					Text = glyph,
-					Font = Enum.Font.GothamBold,
-					TextSize = 14,
-					TextColor3 = Color3.fromRGB(140, 140, 155),
-					TextXAlignment = Enum.TextXAlignment.Center,
-					TextYAlignment = Enum.TextYAlignment.Center,
-					ZIndex = 4,
-				}, btn)
-			end
-			-- Top layer: image (only renders pixels if asset loaded)
-			if assetId then
-				iconLbl = new("ImageLabel", {
-					AnchorPoint = Vector2.new(0, 0.5),
-					Size = UDim2.fromOffset(16, 16),
-					Position = UDim2.new(0, 12, 0.5, 0),
-					BackgroundTransparency = 1,
-					Image = assetId,
-					ImageColor3 = Color3.fromRGB(140, 140, 155),
-					ZIndex = 5,
-				}, btn)
-			end
-			labelX = 34
-		end
-	end
-
-	local lbl = new("TextLabel", {
-		AnchorPoint = Vector2.new(0, 0.5),
-		Size = UDim2.new(1, -(labelX + 12), 1, 0),
-		Position = UDim2.new(0, labelX, 0.5, 0),
-		BackgroundTransparency = 1,
-		Text = t._name,
-		Font = Enum.Font.GothamMedium,
-		TextSize = 12,
-		TextColor3 = Color3.fromRGB(140, 140, 155),
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextYAlignment = Enum.TextYAlignment.Center,
-	}, btn)
-
-	local clickBtn = new("TextButton", {
-		Size = UDim2.fromScale(1,1),
-		BackgroundTransparency = 1,
-		Text = "",
-		AutoButtonColor = false,
-	}, btn)
-
-	t._button = btn
-	t._buttonLabel = lbl
-	t._buttonIcon = iconLbl
-	t._buttonGlyph = glyphLbl
-	t._buttonStroke = btnStroke
-	t._gradient = nil
-
-	clickBtn.MouseButton1Click:Connect(function() win:_SelectTab(t) end)
-	clickBtn.MouseEnter:Connect(function()
-		if win._currentTab ~= t then
-			tween(lbl, 0.15, {TextColor3 = THEME.Text})
-			if iconLbl then
-				if iconLbl:IsA("ImageLabel") then
-					tween(iconLbl, 0.15, {ImageColor3 = THEME.Text})
-				else
-					tween(iconLbl, 0.15, {TextColor3 = THEME.Text})
-				end
-			end
-		end
-	end)
-	clickBtn.MouseLeave:Connect(function()
-		if win._currentTab ~= t then
-			tween(lbl, 0.15, {TextColor3 = THEME.TextDim})
-			if iconLbl then
-				if iconLbl:IsA("ImageLabel") then
-					tween(iconLbl, 0.15, {ImageColor3 = THEME.TextDim})
-				else
-					tween(iconLbl, 0.15, {TextColor3 = THEME.TextDim})
-				end
-			end
-		end
-	end)
-
-	-- Page
-	local page = new("ScrollingFrame", {
-		Name = t._name,
-		Size = UDim2.fromScale(1, 1),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		ScrollBarThickness = 2,
-		ScrollBarImageColor3 = THEME.TextDim,
-		ScrollBarImageTransparency = 0.7,
-		CanvasSize = UDim2.new(),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		Visible = false,
-	}, win._content)
-	list(page, ELEM_GAP)
-	pad(page, 10, 14, 12, 14)
-	t._page = page
-end
-
---==============================================================
--- ELEMENT FACTORY (with explicit LayoutOrder pre-assignment)
---==============================================================
-function VaenHub:_NewElement(tab, kind, name)
-	tab._elemOrder = tab._elemOrder + 1
-	local e = setmetatable({
-		_type = kind, _name = name, _tab = tab, _window = tab._window,
-		_built = false, _enabled = true,
-		_layoutOrder = tab._elemOrder,
-	}, {__index = Elem})
-
-	if kind == "Label" or kind == "Status" or kind == "Section"
-		or kind == "Divider" or kind == "Paragraph" then
-		task.defer(function() if not e._built then self:_Build(e) end end)
-	end
-	return e
-end
-
-function VaenHub:_Build(e)
-	if e._built then return end
-	e._built = true
-	local b = self._Builders[e._type]
-	if b then
-		b(self, e)
-		if e._frame then e._frame.LayoutOrder = e._layoutOrder end
-		table.insert(e._window._elements, e)
-	end
-end
-
-VaenHub._Builders = {}
-
---==============================================================
--- ELEMENT HELPERS
---==============================================================
-local function row(elem, h)
-	local f = new("Frame", {
-		Size = UDim2.new(1, 0, 0, h or ELEMENT_H),
-		BackgroundColor3 = THEME.ElementBg,
-		BorderSizePixel = 0,
-		LayoutOrder = elem._layoutOrder,
-	}, elem._tab._page)
-	corner(f, RADIUS)
-	stroke(f, THEME.Border, 0.7)
-	f.MouseEnter:Connect(function() tween(f, 0.15, {BackgroundColor3 = THEME.ElementHover}) end)
-	f.MouseLeave:Connect(function() tween(f, 0.15, {BackgroundColor3 = THEME.ElementBg}) end)
-	return f
-end
-
-local function addIcon(frame, iconID)
-	if not iconID or iconID == "" then return nil, 14 end
-
-	local imageSource = nil
-	local glyphText = nil
-
-	if type(iconID) == "string" then
-		-- Priority 1: glyph (guaranteed to render)
-		if GLYPHS[iconID] then
-			glyphText = GLYPHS[iconID]
-		-- Priority 2: LUCIDE dictionary
-		elseif LUCIDE[iconID] then
-			imageSource = LUCIDE[iconID]
-		-- Priority 3: raw asset path
-		elseif iconID:match("^rbxasset://") or iconID:match("^rbxassetid://") then
-			imageSource = iconID
-		elseif iconID:match("^%d+$") then
-			imageSource = "rbxassetid://" .. iconID
-		end
-	end
-
-	if glyphText then
-		local img = new("TextLabel", {
-			AnchorPoint = Vector2.new(0, 0.5),
-			Size = UDim2.fromOffset(20, 20),
-			Position = UDim2.new(0, 14, 0.5, 0),
-			BackgroundTransparency = 1,
-			Text = glyphText,
-			Font = Enum.Font.GothamBold,
-			TextSize = 16,
-			TextColor3 = THEME.AccentEnd,
-			TextXAlignment = Enum.TextXAlignment.Center,
-			TextYAlignment = Enum.TextYAlignment.Center,
-		}, frame)
-		return img, 40
-	elseif imageSource then
-		local img = new("ImageLabel", {
-			AnchorPoint = Vector2.new(0, 0.5),
-			Size = UDim2.fromOffset(18, 18),
-			Position = UDim2.new(0, 14, 0.5, 0),
-			BackgroundTransparency = 1,
-			Image = imageSource,
-			ImageColor3 = THEME.AccentEnd,
-		}, frame)
-		return img, 40
-	end
-
-	return nil, 14
-end
-
---==============================================================
--- BUILDERS
---==============================================================
-
--- TOGGLE (gradient track when on)
-VaenHub._Builders.Toggle = function(self, elem)
-	local f = row(elem)
-	local icon, lblX = addIcon(f, elem._icon)
-
-	local lbl = new("TextLabel", {
-		Size = UDim2.new(1, -(lblX + 60), 1, 0),
-		Position = UDim2.fromOffset(lblX, 0),
-		BackgroundTransparency = 1,
-		Text = elem._name,
-		Font = Enum.Font.Gotham,
-		TextSize = 13,
-		TextColor3 = THEME.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-	}, f)
-
-	local track = new("Frame", {
-		AnchorPoint = Vector2.new(1, 0.5),
-		Size = UDim2.fromOffset(36, 18),
-		Position = UDim2.new(1, -14, 0.5, 0),
-		BackgroundColor3 = THEME.ElementHover,
-		BorderSizePixel = 0,
-	}, f)
-	corner(track, 9)
-
-	-- Neon glow underneath the track (your spec — rbxassetid 4998051433)
-	local trackGlow = new("ImageLabel", {
+	new("ImageLabel", {
+		Name = "Icon",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Size = UDim2.new(1, 16, 1, 16),
 		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(15, 15),
 		BackgroundTransparency = 1,
-		Image = "rbxassetid://4998051433",
-		ImageColor3 = THEME.AccentEnd,
-		ImageTransparency = 1,
-		ZIndex = 0,
-	}, track)
-
-	local trackGrad = gradient(track, THEME.AccentStart, THEME.AccentEnd, 90)
-	trackGrad.Enabled = false
-
-	local thumb = new("Frame", {
-		Size = UDim2.fromOffset(13, 13),
-		Position = UDim2.new(0, 3, 0.5, 0),
-		AnchorPoint = Vector2.new(0, 0.5),
-		BackgroundColor3 = Color3.fromRGB(255,255,255),
-		BorderSizePixel = 0,
-		ZIndex = 2,
-	}, track)
-	corner(thumb, 7)
-	local glow = new("UIStroke", {Color = THEME.AccentGlow, Transparency = 1, Thickness = 2}, thumb)
-
-	local btn = new("TextButton", {Size=UDim2.fromScale(1,1), BackgroundTransparency=1, Text="", AutoButtonColor=false}, f)
-
-	local function upd(v, anim)
-		elem._current = v
-		local pos = v and UDim2.new(1, -3, 0.5, 0) or UDim2.new(0, 3, 0.5, 0)
-		local anc = v and Vector2.new(1, 0.5) or Vector2.new(0, 0.5)
-		if anim == false then
-			thumb.Position = pos; thumb.AnchorPoint = anc
-			track.BackgroundColor3 = v and THEME.AccentStart or THEME.ElementHover
-			trackGrad.Enabled = v
-			glow.Transparency = v and 0.5 or 1
-			trackGlow.ImageTransparency = v and 0.6 or 1
-		else
-			-- 0.15s Quad easing per spec
-			tween(thumb, 0.15, {Position = pos, AnchorPoint = anc}, Enum.EasingStyle.Quad)
-			tween(track, 0.15, {BackgroundColor3 = v and THEME.AccentStart or THEME.ElementHover}, Enum.EasingStyle.Quad)
-			trackGrad.Enabled = v
-			tween(glow, 0.15, {Transparency = v and 0.5 or 1}, Enum.EasingStyle.Quad)
-			tween(trackGlow, 0.15, {ImageTransparency = v and 0.6 or 1}, Enum.EasingStyle.Quad)
-		end
-	end
-
-	btn.MouseButton1Click:Connect(function()
-		if not elem._enabled then return end
-		upd(not elem._current)
-		if elem._callback then task.spawn(pcall, elem._callback, elem._current) end
-		if elem._flag and elem._window._configSave.Enabled then elem._window:SaveConfig() end
-	end)
-
-	elem._frame = f
-	elem._update = function(v) upd(v) end
-	upd(elem._default == true, false)
+		Image = "",  -- ← inject Tabler asset later
+		ImageColor3 = Color3.fromRGB(255, 255, 255),
+		ImageTransparency = whiteAlpha(0.7),
+		ZIndex = 4,
+	}, s)
+	return s
 end
 
--- SLIDER (gradient fill)
-VaenHub._Builders.Slider = function(self, elem)
-	elem._min = elem._min or 0
-	elem._max = elem._max or 100
-	elem._step = elem._step or 1
-	elem._current = elem._default or elem._min
+--==============================================================
+-- TOGGLE (iOS style)
+-- HTML off: bg white 0.07, border white 0.08, 36x21
+--   knob 15x15 at top 2 left 2, bg white 0.45
+-- HTML on: bg white 0.92 (almost solid white), border transparent
+--   knob 15x15 at left calc(100%-17px), bg #18181a
+--==============================================================
+local function makeToggle(parent, isOn, width, height)
+	width = width or 36
+	height = height or 21
+	local knobSize = height - 6  -- HTML: 15 for 21, 13 for 17
 
-	local f = row(elem)
-	local icon, lblX = addIcon(f, elem._icon)
-
-	local lbl = new("TextLabel", {
-		Size = UDim2.fromOffset(90, ELEMENT_H),
-		Position = UDim2.fromOffset(lblX, 0),
-		BackgroundTransparency = 1,
-		Text = elem._name,
-		Font = Enum.Font.Gotham,
-		TextSize = 13,
-		TextColor3 = THEME.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-	}, f)
-
-	local valText = new("TextLabel", {
+	local t = new("Frame", {
+		Name = "Toggle",
 		AnchorPoint = Vector2.new(1, 0.5),
-		Size = UDim2.fromOffset(50, ELEMENT_H),
-		Position = UDim2.new(1, -12, 0.5, 0),
-		BackgroundTransparency = 1,
-		Text = tostring(elem._current),
-		Font = Enum.Font.GothamMedium,
-		TextSize = 12,
-		TextColor3 = THEME.TextDim,
-		TextXAlignment = Enum.TextXAlignment.Right,
-	}, f)
-
-	local trackX = lblX + 90
-	local trackEndX = 84
-	local track = new("Frame", {
-		AnchorPoint = Vector2.new(0, 0.5),
-		Size = UDim2.new(1, -(trackX + trackEndX), 0, 4),
-		Position = UDim2.new(0, trackX, 0.5, 0),
-		BackgroundColor3 = THEME.ElementHover,
+		Position = UDim2.new(1, -14, 0.5, 0),
+		Size = UDim2.fromOffset(width, height),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundTransparency = isOn and whiteAlpha(0.92) or whiteAlpha(0.07),
 		BorderSizePixel = 0,
-	}, f)
+		ZIndex = 3,
+	}, parent)
+	corner(t, math.floor(height/2))
+	if not isOn then
+		stroke(t, Color3.fromRGB(255,255,255), whiteAlpha(0.08), 1)
+	end
+
+	local knob = new("Frame", {
+		Name = "Knob",
+		Size = UDim2.fromOffset(knobSize, knobSize),
+		Position = isOn
+			and UDim2.new(1, -(knobSize + 2), 0.5, 0)
+			or  UDim2.new(0, 2, 0.5, 0),
+		AnchorPoint = isOn and Vector2.new(1, 0.5) or Vector2.new(0, 0.5),
+		BackgroundColor3 = isOn and COLOR.KnobOn or COLOR.KnobOff,
+		BackgroundTransparency = isOn and 0 or whiteAlpha(0.45),
+		BorderSizePixel = 0,
+		ZIndex = 4,
+	}, t)
+	corner(knob, math.floor(knobSize/2))
+
+	return t
+end
+
+--==============================================================
+-- SLIDER (white fill on dark track)
+-- HTML: track height 4, bg white 0.08, radius full
+--   fill: white 0.85, width = pct%
+--   thumb: 14x14, white, shadow, at left = pct%
+--==============================================================
+local function makeSlider(parent, pct)
+	local track = new("Frame", {
+		Name = "Slider",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 0, 0.5, 0),
+		Size = UDim2.new(1, 0, 0, 4),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundTransparency = whiteAlpha(0.08),
+		BorderSizePixel = 0,
+		ZIndex = 3,
+	}, parent)
 	corner(track, 2)
 
 	local fill = new("Frame", {
-		Size = UDim2.fromScale(0, 1),
-		BackgroundColor3 = THEME.AccentStart,
+		Name = "Fill",
+		Size = UDim2.new(pct, 0, 1, 0),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundTransparency = whiteAlpha(0.85),
 		BorderSizePixel = 0,
+		ZIndex = 4,
 	}, track)
 	corner(fill, 2)
-	gradient(fill, THEME.AccentStart, THEME.AccentEnd, 0)
 
 	local thumb = new("Frame", {
+		Name = "Thumb",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Size = UDim2.fromOffset(13, 13),
-		Position = UDim2.new(1, 0, 0.5, 0),
-		BackgroundColor3 = Color3.fromRGB(255,255,255),
+		Position = UDim2.new(pct, 0, 0.5, 0),
+		Size = UDim2.fromOffset(14, 14),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
 		BorderSizePixel = 0,
-		ZIndex = 2,
-	}, fill)
+		ZIndex = 5,
+	}, track)
 	corner(thumb, 7)
-	new("UIStroke", {Color = THEME.AccentGlow, Transparency = 0.4, Thickness = 2}, thumb)
-
-	local dragging = false
-	local function setFromX(x)
-		local rel = math.clamp((x - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
-		local raw = elem._min + rel * (elem._max - elem._min)
-		local snapped = math.floor(raw / elem._step + 0.5) * elem._step
-		snapped = math.clamp(snapped, elem._min, elem._max)
-		elem._current = snapped
-		local p = (snapped - elem._min) / (elem._max - elem._min)
-		fill.Size = UDim2.fromScale(p, 1)
-		valText.Text = tostring(snapped)
-		if elem._callback then task.spawn(pcall, elem._callback, snapped) end
-	end
-
-	track.InputBegan:Connect(function(i)
-		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-			dragging = true; setFromX(i.Position.X)
-		end
-	end)
-	fill.InputBegan:Connect(function(i)
-		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-			dragging = true; setFromX(i.Position.X)
-		end
-	end)
-	local c1 = UserInputService.InputChanged:Connect(function(i)
-		if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
-			setFromX(i.Position.X)
-		end
-	end)
-	local c2 = UserInputService.InputEnded:Connect(function(i)
-		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-			if dragging and elem._flag and elem._window._configSave.Enabled then elem._window:SaveConfig() end
-			dragging = false
-		end
-	end)
-	table.insert(elem._window._connections, c1)
-	table.insert(elem._window._connections, c2)
-
-	local p0 = (elem._current - elem._min) / (elem._max - elem._min)
-	fill.Size = UDim2.fromScale(p0, 1)
-
-	elem._frame = f
-	elem._update = function(v)
-		elem._current = v
-		local p = (v - elem._min) / (elem._max - elem._min)
-		fill.Size = UDim2.fromScale(p, 1)
-		valText.Text = tostring(v)
-	end
+	stroke(thumb, Color3.fromRGB(0,0,0), 0.95, 1)
+	return track
 end
 
--- BUTTON
-VaenHub._Builders.Button = function(self, elem)
-	local f = row(elem)
-	local icon, lblX = addIcon(f, elem._icon)
-
-	new("TextLabel", {
-		Size = UDim2.new(1, -(lblX + 24), 1, 0),
-		Position = UDim2.fromOffset(lblX, 0),
-		BackgroundTransparency = 1,
-		Text = elem._name,
-		Font = Enum.Font.GothamMedium,
-		TextSize = 13,
-		TextColor3 = THEME.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-	}, f)
-	new("TextLabel", {
-		AnchorPoint = Vector2.new(1, 0.5),
-		Size = UDim2.fromOffset(16, 16),
-		Position = UDim2.new(1, -14, 0.5, 0),
-		BackgroundTransparency = 1,
-		Text = GLYPHS.arrow,
-		Font = Enum.Font.GothamBold,
-		TextSize = 16,
-		TextColor3 = THEME.TextDim,
-	}, f)
-
-	local btn = new("TextButton", {Size=UDim2.fromScale(1,1), BackgroundTransparency=1, Text="", AutoButtonColor=false}, f)
-	btn.MouseButton1Down:Connect(function()
-		if not elem._enabled then return end
-		tween(f, 0.1, {BackgroundColor3 = THEME.ElementHover}, Enum.EasingStyle.Quad)
-	end)
-	btn.MouseButton1Up:Connect(function()
-		tween(f, 0.15, {BackgroundColor3 = THEME.ElementBg}, Enum.EasingStyle.Quad)
-	end)
-	btn.MouseLeave:Connect(function()
-		tween(f, 0.15, {BackgroundColor3 = THEME.ElementBg}, Enum.EasingStyle.Quad)
-	end)
-	btn.MouseButton1Click:Connect(function()
-		if not elem._enabled then return end
-		if elem._callback then task.spawn(pcall, elem._callback) end
-	end)
-	elem._frame = f
-end
-
--- STATUS (gradient background, glow dot)
-VaenHub._Builders.Status = function(self, elem)
-	local f = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 34),
-		BackgroundColor3 = THEME.ElementBg,
+-- Slider value badge: rounded little pill
+local function makeSliderBadge(parent, valText)
+	local v = new("Frame", {
+		Name = "SliderBadge",
+		Size = UDim2.fromOffset(40, 22),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundTransparency = whiteAlpha(0.04),
 		BorderSizePixel = 0,
-		LayoutOrder = elem._layoutOrder,
-	}, elem._tab._page)
-	corner(f, RADIUS)
-	new("UIStroke", {
-		Color = Color3.fromRGB(0, 100, 60),
-		Thickness = 1,
-		Transparency = 0,
-		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-	}, f)
+		ZIndex = 3,
+	}, parent)
+	corner(v, 6)
+	stroke(v, Color3.fromRGB(255,255,255), whiteAlpha(0.07), 1)
+	new("TextLabel", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Text = valText,
+		Font = Enum.Font.GothamMedium,
+		TextSize = 12,
+		TextColor3 = COLOR.TextPrimary,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextYAlignment = Enum.TextYAlignment.Center,
+		ZIndex = 4,
+	}, v)
+	return v
+end
 
-	-- Subtle green-tinted gradient background
-	gradient(f, Color3.fromRGB(22, 38, 28), Color3.fromRGB(20, 20, 28), 0)
+--==============================================================
+-- DROPDOWN TRIGGER (the pill on the right of a row)
+-- HTML: bg white 0.04, border white 0.08, padding 6 10 6 11, radius 7
+--==============================================================
+local function makeDropdownTrigger(parent, valText)
+	local dd = new("Frame", {
+		Name = "DDTrigger",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -14, 0.5, 0),
+		Size = UDim2.fromOffset(96, 26),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundTransparency = whiteAlpha(0.04),
+		BorderSizePixel = 0,
+		ZIndex = 3,
+	}, parent)
+	corner(dd, 7)
+	stroke(dd, Color3.fromRGB(255,255,255), whiteAlpha(0.08), 1)
 
-	local dot = new("Frame", {
+	new("TextLabel", {
+		Name = "Value",
 		AnchorPoint = Vector2.new(0, 0.5),
-		Size = UDim2.fromOffset(7, 7),
-		Position = UDim2.new(0, 14, 0.5, 0),
-		BackgroundColor3 = THEME.Success,
-		BorderSizePixel = 0,
-	}, f)
-	corner(dot, 4)
-	local dotGlow = new("UIStroke", {Color = THEME.Success, Transparency = 0.3, Thickness = 2}, dot)
-
-	task.spawn(function()
-		while f.Parent do
-			tween(dotGlow, 1.0, {Transparency = 0.85, Thickness = 5}, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
-			task.wait(1.0)
-			if not f.Parent then break end
-			tween(dotGlow, 1.0, {Transparency = 0.3, Thickness = 2}, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
-			task.wait(1.0)
-		end
-	end)
-
-	local nameLbl = new("TextLabel", {
-		Size = UDim2.fromOffset(56, 38),
-		Position = UDim2.fromOffset(30, 0),
+		Position = UDim2.new(0, 11, 0.5, 0),
+		Size = UDim2.new(1, -32, 1, 0),
 		BackgroundTransparency = 1,
-		Text = elem._name,
-		Font = Enum.Font.Gotham,
-		TextSize = 12,
-		TextColor3 = THEME.TextDim,
-		TextXAlignment = Enum.TextXAlignment.Left,
-	}, f)
-	local valLbl = new("TextLabel", {
-		Size = UDim2.new(1, -200, 1, 0),
-		Position = UDim2.fromOffset(90, 0),
-		BackgroundTransparency = 1,
-		Text = elem._content or "—",
+		Text = valText,
 		Font = Enum.Font.GothamMedium,
 		TextSize = 12,
-		TextColor3 = THEME.Text,
+		TextColor3 = COLOR.TextPrimary,
 		TextXAlignment = Enum.TextXAlignment.Left,
-	}, f)
-	local metric = new("TextLabel", {
+		TextYAlignment = Enum.TextYAlignment.Center,
+		ZIndex = 4,
+	}, dd)
+
+	-- chevron placeholder (rotated frame V-shape — no assets needed)
+	local chev = new("Frame", {
+		Name = "Chevron",
 		AnchorPoint = Vector2.new(1, 0.5),
-		Size = UDim2.fromOffset(100, 34),
-		Position = UDim2.new(1, -12, 0.5, 0),
+		Position = UDim2.new(1, -10, 0.5, 0),
+		Size = UDim2.fromOffset(8, 8),
 		BackgroundTransparency = 1,
-		Text = "",
-		Font = Enum.Font.GothamMedium,
-		TextSize = 12,
-		TextColor3 = THEME.Success,
-		TextXAlignment = Enum.TextXAlignment.Right,
-	}, f)
-
-	elem._frame = f
-	elem._setContent = function(c) valLbl.Text = tostring(c) end
-	elem.Set = function(s, val, met)
-		s._current = val
-		valLbl.Text = tostring(val)
-		if met ~= nil then metric.Text = tostring(met) end
-		return s
-	end
-	elem.Metric = function(s, m) metric.Text = tostring(m); return s end
-end
-
--- DROPDOWN
-VaenHub._Builders.Dropdown = function(self, elem)
-	elem._options = elem._options or {}
-	if type(elem._current) ~= "table" then
-		elem._current = elem._default or {}
-		if type(elem._current) == "string" then elem._current = {elem._current} end
-	end
-
-	local f = new("Frame", {
-		Size = UDim2.new(1, 0, 0, ELEMENT_H),
-		BackgroundColor3 = THEME.ElementBg,
-		BorderSizePixel = 0,
-		ClipsDescendants = true,
-		LayoutOrder = elem._layoutOrder,
-	}, elem._tab._page)
-	corner(f, RADIUS)
-	stroke(f, THEME.Border, 0.7)
-
-	local hH = ELEMENT_H
-	local icon, lblX = addIcon(f, elem._icon)
-
-	new("TextLabel", {
-		Size = UDim2.fromOffset(120, hH),
-		Position = UDim2.fromOffset(lblX, 0),
-		BackgroundTransparency = 1,
-		Text = elem._name,
-		Font = Enum.Font.Gotham,
-		TextSize = 13,
-		TextColor3 = THEME.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-	}, f)
-
-	local pill = new("Frame", {
-		AnchorPoint = Vector2.new(1, 0.5),
-		Size = UDim2.fromOffset(120, 24),
-		Position = UDim2.new(1, -18, 0, hH/2),
-		BackgroundColor3 = THEME.ElementHover,
-		BorderSizePixel = 0,
-	}, f)
-	corner(pill, 6)
-
-	local pillText = new("TextLabel", {
-		Size = UDim2.new(1, -24, 1, 0),
-		Position = UDim2.fromOffset(8, 0),
-		BackgroundTransparency = 1,
-		Text = #elem._current > 0 and (#elem._current == 1 and elem._current[1] or (#elem._current.." selected")) or "None",
-		Font = Enum.Font.Gotham,
-		TextSize = 11,
-		TextColor3 = THEME.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-	}, pill)
-
-	-- Chevron from two rotated frames (no unicode square issue)
-	local chevContainer = new("Frame", {
-		AnchorPoint = Vector2.new(1, 0.5),
-		Size = UDim2.fromOffset(10, 10),
-		Position = UDim2.new(1, -6, 0.5, 0),
-		BackgroundTransparency = 1,
-	}, pill)
-
-	local chevLeft = new("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Size = UDim2.fromOffset(7, 1.5),
-		Position = UDim2.new(0.3, 0, 0.45, 0),
-		BackgroundColor3 = THEME.TextDim,
-		BorderSizePixel = 0,
-		Rotation = 45,
-	}, chevContainer)
-	corner(chevLeft, 1)
-
-	local chevRight = new("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Size = UDim2.fromOffset(7, 1.5),
-		Position = UDim2.new(0.7, 0, 0.45, 0),
-		BackgroundColor3 = THEME.TextDim,
-		BorderSizePixel = 0,
-		Rotation = -45,
-	}, chevContainer)
-	corner(chevRight, 1)
-
-	local opts = new("Frame", {
-		Size = UDim2.new(1, -28, 0, 0),
-		Position = UDim2.fromOffset(14, hH + 4),
-		BackgroundTransparency = 1,
-	}, f)
-	list(opts, 4)
-
-	local function refresh()
-		for _, c in ipairs(opts:GetChildren()) do
-			if c:IsA("TextButton") then c:Destroy() end
-		end
-		for _, opt in ipairs(elem._options) do
-			local ob = new("TextButton", {
-				Size = UDim2.new(1, 0, 0, 26),
-				BackgroundColor3 = THEME.ElementHover,
-				BorderSizePixel = 0,
-				Text = "",
-				AutoButtonColor = false,
-			}, opts)
-			corner(ob, 6)
-			local olb = new("TextLabel", {
-				Size = UDim2.new(1, -16, 1, 0),
-				Position = UDim2.fromOffset(10, 0),
-				BackgroundTransparency = 1,
-				Text = opt,
-				Font = Enum.Font.Gotham,
-				TextSize = 11,
-				TextColor3 = THEME.TextDim,
-				TextXAlignment = Enum.TextXAlignment.Left,
-			}, ob)
-
-			local isSel = table.find(elem._current, opt) ~= nil
-			if isSel then
-				ob.BackgroundColor3 = THEME.AccentStart
-				ob.BackgroundTransparency = 0.5
-				olb.TextColor3 = THEME.Text
-			end
-
-			ob.MouseButton1Click:Connect(function()
-				local idx = table.find(elem._current, opt)
-				if elem._multi then
-					if idx then table.remove(elem._current, idx) else table.insert(elem._current, opt) end
-				else
-					elem._current = {opt}
-				end
-				pillText.Text = #elem._current > 0 and (#elem._current == 1 and elem._current[1] or (#elem._current.." selected")) or "None"
-				for _, c in ipairs(opts:GetChildren()) do
-					if c:IsA("TextButton") then
-						local cl = c:FindFirstChildWhichIsA("TextLabel")
-						if cl then
-							local s = table.find(elem._current, cl.Text) ~= nil
-							c.BackgroundColor3 = s and THEME.AccentStart or THEME.ElementHover
-							c.BackgroundTransparency = s and 0.5 or 0
-							cl.TextColor3 = s and THEME.Text or THEME.TextDim
-						end
-					end
-				end
-				if elem._callback then task.spawn(pcall, elem._callback, elem._current) end
-				if elem._flag and elem._window._configSave.Enabled then elem._window:SaveConfig() end
-			end)
-		end
-	end
-	refresh()
-
-	local clickBtn = new("TextButton", {
-		Size = UDim2.new(1, 0, 0, hH),
-		BackgroundTransparency = 1,
-		Text = "",
-		AutoButtonColor = false,
-	}, f)
-	local open = false
-	clickBtn.MouseButton1Click:Connect(function()
-		open = not open
-		local total = #elem._options * 30
-		if open then
-			tween(f, 0.25, {Size = UDim2.new(1, 0, 0, hH + total + 12)})
-			tween(chevLeft, 0.25, {Rotation = -45, Position = UDim2.new(0.3, 0, 0.55, 0)})
-			tween(chevRight, 0.25, {Rotation = 45, Position = UDim2.new(0.7, 0, 0.55, 0)})
-		else
-			tween(f, 0.25, {Size = UDim2.new(1, 0, 0, hH)})
-			tween(chevLeft, 0.25, {Rotation = 45, Position = UDim2.new(0.3, 0, 0.45, 0)})
-			tween(chevRight, 0.25, {Rotation = -45, Position = UDim2.new(0.7, 0, 0.45, 0)})
-		end
-	end)
-
-	elem._frame = f
-	elem._refresh = refresh
-	elem._update = function(v)
-		elem._current = type(v) == "table" and v or {v}
-		pillText.Text = #elem._current > 0 and (#elem._current == 1 and elem._current[1] or (#elem._current.." selected")) or "None"
-		refresh()
-	end
-end
-
--- INPUT
-VaenHub._Builders.Input = function(self, elem)
-	local f = row(elem)
-	local icon, lblX = addIcon(f, elem._icon)
-
-	new("TextLabel", {
-		Size = UDim2.fromOffset(130, ELEMENT_H),
-		Position = UDim2.fromOffset(lblX, 0),
-		BackgroundTransparency = 1,
-		Text = elem._name,
-		Font = Enum.Font.Gotham,
-		TextSize = 13,
-		TextColor3 = THEME.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-	}, f)
-
-	local ibg = new("Frame", {
-		AnchorPoint = Vector2.new(1, 0.5),
-		Size = UDim2.new(0, 160, 0, 26),
-		Position = UDim2.new(1, -14, 0.5, 0),
-		BackgroundColor3 = THEME.ElementHover,
-		BorderSizePixel = 0,
-	}, f)
-	corner(ibg, 6)
-	local ist = stroke(ibg, THEME.Border, 0.6)
-
-	local box = new("TextBox", {
-		Size = UDim2.new(1, -16, 1, 0),
-		Position = UDim2.fromOffset(8, 0),
-		BackgroundTransparency = 1,
-		Text = elem._default or "",
-		PlaceholderText = elem._placeholder or "...",
-		PlaceholderColor3 = THEME.TextFaint,
-		Font = Enum.Font.Gotham,
-		TextSize = 12,
-		TextColor3 = THEME.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		ClearTextOnFocus = false,
-	}, ibg)
-	box.Focused:Connect(function() tween(ist, 0.15, {Color = THEME.AccentEnd, Transparency = 0.3}) end)
-	box.FocusLost:Connect(function()
-		tween(ist, 0.15, {Color = THEME.Border, Transparency = 0.6})
-		elem._current = box.Text
-		if elem._callback then task.spawn(pcall, elem._callback, box.Text) end
-		if elem._flag and elem._window._configSave.Enabled then elem._window:SaveConfig() end
-	end)
-
-	elem._frame = f
-	elem._update = function(v) box.Text = tostring(v) end
-end
-
--- KEYBIND
-VaenHub._Builders.Keybind = function(self, elem)
-	elem._current = elem._default or "None"
-	local f = row(elem)
-	local icon, lblX = addIcon(f, elem._icon)
-
-	new("TextLabel", {
-		Size = UDim2.new(1, -(lblX + 90), 1, 0),
-		Position = UDim2.fromOffset(lblX, 0),
-		BackgroundTransparency = 1,
-		Text = elem._name,
-		Font = Enum.Font.Gotham,
-		TextSize = 13,
-		TextColor3 = THEME.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-	}, f)
-
-	local bb = new("TextButton", {
-		AnchorPoint = Vector2.new(1, 0.5),
-		Size = UDim2.fromOffset(64, 26),
-		Position = UDim2.new(1, -14, 0.5, 0),
-		BackgroundColor3 = THEME.ElementHover,
-		BorderSizePixel = 0,
-		Text = elem._current,
-		Font = Enum.Font.GothamMedium,
-		TextSize = 11,
-		TextColor3 = THEME.Text,
-		AutoButtonColor = false,
-	}, f)
-	corner(bb, 6)
-	stroke(bb, THEME.Border, 0.6)
-
-	local capturing = false
-	bb.MouseButton1Click:Connect(function() capturing = true; bb.Text = "..." end)
-
-	local c = UserInputService.InputBegan:Connect(function(input, processed)
-		if capturing and input.KeyCode ~= Enum.KeyCode.Unknown then
-			capturing = false
-			elem._current = input.KeyCode.Name
-			bb.Text = elem._current
-			if elem._flag and elem._window._configSave.Enabled then elem._window:SaveConfig() end
-		elseif not capturing and not processed and input.KeyCode.Name == elem._current then
-			if elem._callback then task.spawn(pcall, elem._callback, elem._current) end
-		end
-	end)
-	table.insert(elem._window._connections, c)
-
-	elem._frame = f
-	elem._update = function(v) elem._current = v; bb.Text = tostring(v) end
-end
-
--- COLOR PICKER
-VaenHub._Builders.ColorPicker = function(self, elem)
-	elem._current = elem._default or Color3.fromRGB(255,255,255)
-	local f = row(elem)
-	local icon, lblX = addIcon(f, elem._icon)
-
-	new("TextLabel", {
-		Size = UDim2.new(1, -(lblX + 60), 1, 0),
-		Position = UDim2.fromOffset(lblX, 0),
-		BackgroundTransparency = 1,
-		Text = elem._name,
-		Font = Enum.Font.Gotham,
-		TextSize = 13,
-		TextColor3 = THEME.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-	}, f)
-
-	local sw = new("Frame", {
-		AnchorPoint = Vector2.new(1, 0.5),
-		Size = UDim2.fromOffset(32, 22),
-		Position = UDim2.new(1, -14, 0.5, 0),
-		BackgroundColor3 = elem._current,
-		BorderSizePixel = 0,
-	}, f)
-	corner(sw, 5)
-	stroke(sw, Color3.fromRGB(255,255,255), 0.75)
-
-	local btn = new("TextButton", {Size=UDim2.fromScale(1,1), BackgroundTransparency=1, Text="", AutoButtonColor=false}, f)
-	local presets = {
-		Color3.fromRGB(255,255,255), Color3.fromRGB(239,68,68),
-		Color3.fromRGB(250,204,21), Color3.fromRGB(34,197,94),
-		Color3.fromRGB(56,189,248), Color3.fromRGB(168,85,247),
-		Color3.fromRGB(244,114,182),
-	}
-	local idx = 1
-	btn.MouseButton1Click:Connect(function()
-		idx = idx % #presets + 1
-		elem._current = presets[idx]
-		tween(sw, 0.15, {BackgroundColor3 = elem._current})
-		if elem._callback then task.spawn(pcall, elem._callback, elem._current) end
-		if elem._flag and elem._window._configSave.Enabled then elem._window:SaveConfig() end
-	end)
-
-	elem._frame = f
-	elem._update = function(v) elem._current = v; sw.BackgroundColor3 = v end
-end
-
--- LABEL
-VaenHub._Builders.Label = function(self, elem)
-	local f = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 22),
-		BackgroundTransparency = 1,
-		LayoutOrder = elem._layoutOrder,
-	}, elem._tab._page)
-	local lbl = new("TextLabel", {
-		Size = UDim2.fromScale(1,1),
-		Position = UDim2.fromOffset(4, 0),
-		BackgroundTransparency = 1,
-		Text = elem._name,
-		Font = Enum.Font.Gotham,
-		TextSize = 12,
-		TextColor3 = THEME.TextDim,
-		TextXAlignment = Enum.TextXAlignment.Left,
-	}, f)
-	elem._frame = f
-	elem._update = function(v) lbl.Text = v end
-end
-
--- SECTION
-VaenHub._Builders.Section = function(self, elem)
-	local f = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 22),
-		BackgroundTransparency = 1,
-		LayoutOrder = elem._layoutOrder,
-	}, elem._tab._page)
-	new("TextLabel", {
-		Size = UDim2.fromScale(1,1),
-		Position = UDim2.fromOffset(4, 6),
-		BackgroundTransparency = 1,
-		Text = elem._name:upper(),
-		Font = Enum.Font.GothamBold,
-		TextSize = 10,
-		TextColor3 = THEME.TextFaint,
-		TextXAlignment = Enum.TextXAlignment.Left,
-	}, f)
-	elem._frame = f
-end
-
--- DIVIDER
-VaenHub._Builders.Divider = function(self, elem)
-	local f = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 8),
-		BackgroundTransparency = 1,
-		LayoutOrder = elem._layoutOrder,
-	}, elem._tab._page)
+		ZIndex = 4,
+	}, dd)
+	-- two short bars forming a ˅
 	new("Frame", {
 		AnchorPoint = Vector2.new(0, 0.5),
-		Size = UDim2.new(1, -8, 0, 1),
-		Position = UDim2.new(0, 4, 0.5, 0),
-		BackgroundColor3 = Color3.fromRGB(255,255,255),
-		BackgroundTransparency = 0.92,
+		Position = UDim2.new(0, 0, 0.4, 0),
+		Size = UDim2.fromOffset(6, 1.5),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundTransparency = whiteAlpha(0.5),
 		BorderSizePixel = 0,
-	}, f)
-	elem._frame = f
+		Rotation = 30,
+		ZIndex = 5,
+	}, chev)
+	new("Frame", {
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, 0, 0.4, 0),
+		Size = UDim2.fromOffset(6, 1.5),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundTransparency = whiteAlpha(0.5),
+		BorderSizePixel = 0,
+		Rotation = -30,
+		ZIndex = 5,
+	}, chev)
+
+	return dd
 end
 
--- PARAGRAPH
-VaenHub._Builders.Paragraph = function(self, elem)
-	local f = new("Frame", {
-		AutomaticSize = Enum.AutomaticSize.Y,
-		Size = UDim2.new(1, 0, 0, 0),
-		BackgroundColor3 = THEME.ElementBg,
-		BorderSizePixel = 0,
-		LayoutOrder = elem._layoutOrder,
-	}, elem._tab._page)
-	corner(f, RADIUS)
-	stroke(f, THEME.Border, 0.7)
-	pad(f, 10, 14, 12, 14)
+--==============================================================
+-- BUILD THE "MAIN" PANEL — exact replica of HTML data-panel="main"
+--==============================================================
+
+-- ROW 1: Auto Farm (toggle ON, 2-line text)
+local row1 = makeCard(1, 56)
+do
+	local icon = makeIconSquare(row1, 30)
+	icon.Position = UDim2.new(0, 14, 0.5, 0)
+	icon.AnchorPoint = Vector2.new(0, 0.5)
+
+	-- 2-line text block: title + subtitle
+	new("TextLabel", {
+		Name = "Title",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 14 + 30 + 11, 0.5, -8),
+		Size = UDim2.fromOffset(220, 16),
+		BackgroundTransparency = 1,
+		Text = "Auto Farm",
+		Font = Enum.Font.GothamMedium,
+		TextSize = 13,
+		TextColor3 = COLOR.TextPrimary,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Center,
+		ZIndex = 3,
+	}, row1)
+	new("TextLabel", {
+		Name = "Subtitle",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 14 + 30 + 11, 0.5, 8),
+		Size = UDim2.fromOffset(280, 14),
+		BackgroundTransparency = 1,
+		Text = "Phase-based animation detection",
+		Font = Enum.Font.Gotham,
+		TextSize = 10,
+		TextColor3 = Color3.fromRGB(255,255,255),
+		TextTransparency = whiteAlpha(0.4),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Center,
+		ZIndex = 3,
+	}, row1)
+
+	makeToggle(row1, true)  -- ON
+end
+
+-- ROW 2: Speed slider (value 64)
+local row2 = makeCard(2, 56)
+do
+	local icon = makeIconSquare(row2, 30)
+	icon.Position = UDim2.new(0, 14, 0.5, 0)
+	icon.AnchorPoint = Vector2.new(0, 0.5)
 
 	new("TextLabel", {
-		Size = UDim2.new(1, 0, 0, 18),
+		Name = "Title",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 14 + 30 + 11, 0.5, 0),
+		Size = UDim2.fromOffset(60, 30),
 		BackgroundTransparency = 1,
-		Text = elem._name,
+		Text = "Speed",
 		Font = Enum.Font.GothamMedium,
-		TextSize = 12,
-		TextColor3 = THEME.Text,
+		TextSize = 13,
+		TextColor3 = COLOR.TextPrimary,
 		TextXAlignment = Enum.TextXAlignment.Left,
-	}, f)
-	local content = new("TextLabel", {
-		AutomaticSize = Enum.AutomaticSize.Y,
-		Size = UDim2.new(1, 0, 0, 0),
-		Position = UDim2.fromOffset(0, 22),
+		TextYAlignment = Enum.TextYAlignment.Center,
+		ZIndex = 3,
+	}, row2)
+
+	-- slider area: between label end (~125px) and badge (~50px from right)
+	local sliderArea = new("Frame", {
+		Name = "SliderArea",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 14 + 30 + 11 + 60 + 8, 0.5, 0),
+		Size = UDim2.new(1, -(14 + 30 + 11 + 60 + 8 + 50 + 14 + 8), 0, 14),
 		BackgroundTransparency = 1,
-		Text = elem._content or "",
-		Font = Enum.Font.Gotham,
-		TextSize = 11,
-		TextColor3 = THEME.TextDim,
+		ZIndex = 3,
+	}, row2)
+	makeSlider(sliderArea, 0.64)
+
+	local badge2 = makeSliderBadge(row2, "64")
+	badge2.AnchorPoint = Vector2.new(1, 0.5)
+	badge2.Position = UDim2.new(1, -14, 0.5, 0)
+end
+
+-- ROW 3: Target dropdown (value "Closest", 2-line)
+local row3 = makeCard(3, 56)
+do
+	local icon = makeIconSquare(row3, 30)
+	icon.Position = UDim2.new(0, 14, 0.5, 0)
+	icon.AnchorPoint = Vector2.new(0, 0.5)
+
+	new("TextLabel", {
+		Name = "Title",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 14 + 30 + 11, 0.5, -8),
+		Size = UDim2.fromOffset(220, 16),
+		BackgroundTransparency = 1,
+		Text = "Target",
+		Font = Enum.Font.GothamMedium,
+		TextSize = 13,
+		TextColor3 = COLOR.TextPrimary,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextYAlignment = Enum.TextYAlignment.Top,
-		TextWrapped = true,
-	}, f)
-	elem._frame = f
-	elem._setContent = function(c) content.Text = c end
+		TextYAlignment = Enum.TextYAlignment.Center,
+		ZIndex = 3,
+	}, row3)
+	new("TextLabel", {
+		Name = "Subtitle",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 14 + 30 + 11, 0.5, 8),
+		Size = UDim2.fromOffset(220, 14),
+		BackgroundTransparency = 1,
+		Text = "Closest enemy",
+		Font = Enum.Font.Gotham,
+		TextSize = 10,
+		TextColor3 = Color3.fromRGB(255,255,255),
+		TextTransparency = whiteAlpha(0.4),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Center,
+		ZIndex = 3,
+	}, row3)
+
+	makeDropdownTrigger(row3, "Closest")
 end
 
---==============================================================
--- CONFIG SAVE/LOAD
---==============================================================
-function VaenHub:_SaveConfig(win, profile)
-	if not (writefile and makefolder) then return end
-	local data = {}
-	for _, e in ipairs(win._elements) do
-		if e._flag then
-			if e._type == "ColorPicker" then
-				local c = e._current or Color3.new(1,1,1)
-				data[e._flag] = {c.R*255, c.G*255, c.B*255}
-			else
-				data[e._flag] = e._current
-			end
-		end
-	end
-	pcall(function()
-		if not isfolder("VaenHub") then makefolder("VaenHub") end
-		if not isfolder("VaenHub/Configs") then makefolder("VaenHub/Configs") end
-		local folder = "VaenHub/Configs/"..(win._configSave.FolderName or win._name)
-		if not isfolder(folder) then makefolder(folder) end
-		writefile(folder.."/"..profile..".vhc", HttpService:JSONEncode(data))
-	end)
-end
+-- ROW 4: Two small toggle cards side-by-side (Anti-AFK ON, Auto Upgrade OFF)
+local row4 = new("Frame", {
+	Name = "Row4",
+	Size = UDim2.new(1, 0, 0, 44),
+	BackgroundTransparency = 1,
+	LayoutOrder = 4,
+	ZIndex = 2,
+}, panel)
+local row4Layout = listH(row4, 8)
+row4Layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 
-function VaenHub:_LoadConfig(win, profile)
-	if not (readfile and isfile) then return end
-	local folder = "VaenHub/Configs/"..(win._configSave.FolderName or win._name)
-	local path = folder.."/"..profile..".vhc"
-	if not isfile(path) then return end
-	local ok, data = pcall(function() return HttpService:JSONDecode(readfile(path)) end)
-	if not ok or not data then return end
-	for _, e in ipairs(win._elements) do
-		if e._flag and data[e._flag] ~= nil then
-			local v = data[e._flag]
-			if e._type == "ColorPicker" and type(v) == "table" then
-				v = Color3.fromRGB(v[1], v[2], v[3])
-			end
-			pcall(function() e:Set(v) end)
-		end
-	end
-end
-
---==============================================================
--- NOTIFICATIONS
---==============================================================
-VaenHub._notifContainer = nil
-VaenHub._notifActive = 0
-VaenHub._notifQueue = {}
-
-function VaenHub:_QueueNotif(d)
-	if not self._notifContainer then self:_MakeNotifContainer() end
-	if self._notifActive >= 4 then table.insert(self._notifQueue, d); return end
-	self:_ShowNotif(d)
-end
-
-function VaenHub:_MakeNotifContainer()
-	local g = new("ScreenGui", {
-		Name = "VHNotif_"..HttpService:GenerateGUID(false):sub(1,6),
-		IgnoreGuiInset = true,
-		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-		DisplayOrder = 200,
-		ResetOnSpawn = false,
-	})
-	if gethui then g.Parent = gethui() else g.Parent = CoreGui end
+local function makeSmallToggleCard(text, isOn, order)
 	local c = new("Frame", {
-		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, -20, 1, -20),
-		Size = UDim2.fromOffset(300, 400),
+		Name = "SmallCard",
+		Size = UDim2.new(0.5, -4, 1, 0),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundTransparency = whiteAlpha(0.025),
+		BorderSizePixel = 0,
+		LayoutOrder = order,
+		ZIndex = 2,
+	}, row4)
+	corner(c, 11)
+	stroke(c, Color3.fromRGB(255,255,255), whiteAlpha(0.06), 1)
+
+	-- icon 26x26
+	local ic = new("Frame", {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 12, 0.5, 0),
+		Size = UDim2.fromOffset(26, 26),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundTransparency = whiteAlpha(0.04),
+		BorderSizePixel = 0,
+		ZIndex = 3,
+	}, c)
+	corner(ic, 7)
+	stroke(ic, Color3.fromRGB(255,255,255), whiteAlpha(0.07), 1)
+	new("ImageLabel", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(13, 13),
 		BackgroundTransparency = 1,
-	}, g)
-	local l = list(c, 8)
-	l.VerticalAlignment = Enum.VerticalAlignment.Bottom
-	l.HorizontalAlignment = Enum.HorizontalAlignment.Right
-	self._notifContainer = c
-end
-
-function VaenHub:_ShowNotif(d)
-	self._notifActive = self._notifActive + 1
-	local n = new("Frame", {
-		Size = UDim2.new(1, 0, 0, 64),
-		BackgroundColor3 = THEME.ElementBg,
-		BorderSizePixel = 0,
-	}, self._notifContainer)
-	corner(n, 10)
-	stroke(n, THEME.Border, 0.5)
-
-	local acc = THEME.AccentStart
-	if d.Type == "success" then acc = THEME.Success
-	elseif d.Type == "warning" then acc = THEME.Warning
-	elseif d.Type == "error" then acc = THEME.Danger end
-
-	local stripe = new("Frame", {
-		Size = UDim2.fromOffset(3, 32),
-		Position = UDim2.fromOffset(0, 16),
-		BackgroundColor3 = acc,
-		BorderSizePixel = 0,
-	}, n)
-	corner(stripe, 2)
+		Image = "",
+		ImageColor3 = Color3.fromRGB(255,255,255),
+		ImageTransparency = whiteAlpha(0.65),
+		ZIndex = 4,
+	}, ic)
 
 	new("TextLabel", {
-		Size = UDim2.new(1, -24, 0, 18),
-		Position = UDim2.fromOffset(14, 10),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 12 + 26 + 9, 0.5, 0),
+		Size = UDim2.new(1, -120, 1, 0),
 		BackgroundTransparency = 1,
-		Text = d.Title,
+		Text = text,
 		Font = Enum.Font.GothamMedium,
 		TextSize = 12,
-		TextColor3 = THEME.Text,
+		TextColor3 = COLOR.TextPrimary,
 		TextXAlignment = Enum.TextXAlignment.Left,
-	}, n)
-	new("TextLabel", {
-		Size = UDim2.new(1, -24, 0, 32),
-		Position = UDim2.fromOffset(14, 28),
+		TextYAlignment = Enum.TextYAlignment.Center,
+		ZIndex = 3,
+	}, c)
+
+	makeToggle(c, isOn, 30, 17)
+end
+
+makeSmallToggleCard("Anti-AFK",     true,  1)
+makeSmallToggleCard("Auto Upgrade", false, 2)
+
+-- ROW 5: Two action buttons (Server Hop, Rejoin)
+local row5 = new("Frame", {
+	Name = "Row5",
+	Size = UDim2.new(1, 0, 0, 34),
+	BackgroundTransparency = 1,
+	LayoutOrder = 5,
+	ZIndex = 2,
+}, panel)
+listH(row5, 8)
+
+local function makeActionBtn(text, order)
+	local b = new("TextButton", {
+		Name = "ActBtn",
+		Size = UDim2.new(0.5, -4, 1, 0),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundTransparency = whiteAlpha(0.03),
+		BorderSizePixel = 0,
+		Text = "",
+		AutoButtonColor = false,
+		LayoutOrder = order,
+		ZIndex = 2,
+	}, row5)
+	corner(b, 9)
+	stroke(b, Color3.fromRGB(255,255,255), whiteAlpha(0.07), 1)
+
+	-- icon placeholder
+	new("ImageLabel", {
+		Name = "Icon",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5):Lerp(UDim2.new(0, 0, 0.5, 0), 0) + UDim2.fromOffset(-#text*3 - 8, 0),
+		Size = UDim2.fromOffset(13, 13),
 		BackgroundTransparency = 1,
-		Text = d.Content,
-		Font = Enum.Font.Gotham,
-		TextSize = 11,
-		TextColor3 = THEME.TextDim,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextYAlignment = Enum.TextYAlignment.Top,
-		TextWrapped = true,
-	}, n)
+		Image = "",
+		ImageColor3 = Color3.fromRGB(255,255,255),
+		ImageTransparency = whiteAlpha(0.85),
+		ZIndex = 3,
+	}, b)
 
-	n.Position = UDim2.new(1, 50, 0, 0)
-	tween(n, 0.35, {Position = UDim2.fromOffset(0, 0)})
-
-	task.delay(d.Duration, function()
-		tween(n, 0.35, {BackgroundTransparency = 1})
-		for _, c in ipairs(n:GetDescendants()) do
-			if c:IsA("TextLabel") then tween(c, 0.35, {TextTransparency = 1}) end
-		end
-		task.wait(0.35)
-		n:Destroy()
-		self._notifActive = self._notifActive - 1
-		if #self._notifQueue > 0 then self:_ShowNotif(table.remove(self._notifQueue, 1)) end
-	end)
+	new("TextLabel", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, -8, 1, 0),
+		BackgroundTransparency = 1,
+		Text = text,
+		Font = Enum.Font.GothamMedium,
+		TextSize = 12,
+		TextColor3 = Color3.fromRGB(255,255,255),
+		TextTransparency = whiteAlpha(0.85),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextYAlignment = Enum.TextYAlignment.Center,
+		ZIndex = 3,
+	}, b)
 end
 
---==============================================================
--- DRAGGABLE
---==============================================================
-function VaenHub:_MakeDraggable(frame, handle)
-	local dragging, dragStart, startPos
-	handle.InputBegan:Connect(function(i)
-		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-			dragging = true
-			dragStart = i.Position
-			startPos = frame.Position
-		end
-	end)
-	handle.InputEnded:Connect(function(i)
-		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-			dragging = false
-		end
-	end)
-	UserInputService.InputChanged:Connect(function(i)
-		if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
-			local d = i.Position - dragStart
-			frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
-		end
-	end)
-end
+makeActionBtn("Server Hop", 1)
+makeActionBtn("Rejoin",     2)
 
-return VaenHub
+-- ROW 6: Status bar (green-tinted) with title + Farming + 1,247 collected
+local row6 = new("Frame", {
+	Name = "StatusBar",
+	Size = UDim2.new(1, 0, 0, 56),
+	BackgroundColor3 = Color3.fromRGB(52, 211, 153),
+	BackgroundTransparency = 1 - 0.07,
+	BorderSizePixel = 0,
+	LayoutOrder = 6,
+	ZIndex = 2,
+}, panel)
+corner(row6, 11)
+stroke(row6, Color3.fromRGB(52, 211, 153), 1 - 0.2, 1)
+
+-- green dot with glow
+local dotWrap = new("Frame", {
+	Name = "DotWrap",
+	AnchorPoint = Vector2.new(0, 0.5),
+	Position = UDim2.new(0, 14, 0.5, 0),
+	Size = UDim2.fromOffset(9, 9),
+	BackgroundTransparency = 1,
+	ZIndex = 3,
+}, row6)
+local dot = new("Frame", {
+	Size = UDim2.fromScale(1, 1),
+	BackgroundColor3 = COLOR.Success,
+	BorderSizePixel = 0,
+	ZIndex = 3,
+}, dotWrap)
+corner(dot, 5)
+-- pulse halo (static — animate later)
+local halo = new("ImageLabel", {
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromOffset(28, 28),
+	BackgroundTransparency = 1,
+	Image = glowAsset,
+	ImageColor3 = COLOR.Success,
+	ImageTransparency = 0.6,
+	ZIndex = 2,
+}, dotWrap)
+
+-- "STATUS" small uppercase label + "Farming" below
+new("TextLabel", {
+	Name = "StatusLabel",
+	AnchorPoint = Vector2.new(0, 0.5),
+	Position = UDim2.new(0, 14 + 9 + 13, 0.5, -10),
+	Size = UDim2.fromOffset(120, 14),
+	BackgroundTransparency = 1,
+	Text = "STATUS",
+	Font = Enum.Font.GothamMedium,
+	TextSize = 10,
+	TextColor3 = Color3.fromRGB(255,255,255),
+	TextTransparency = whiteAlpha(0.45),
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextYAlignment = Enum.TextYAlignment.Center,
+	ZIndex = 3,
+}, row6)
+new("TextLabel", {
+	Name = "StatusValue",
+	AnchorPoint = Vector2.new(0, 0.5),
+	Position = UDim2.new(0, 14 + 9 + 13, 0.5, 8),
+	Size = UDim2.fromOffset(180, 16),
+	BackgroundTransparency = 1,
+	Text = "Farming",
+	Font = Enum.Font.GothamMedium,
+	TextSize = 13,
+	TextColor3 = COLOR.TextPrimary,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextYAlignment = Enum.TextYAlignment.Center,
+	ZIndex = 3,
+}, row6)
+
+-- right side: big "1,247" + small "COLLECTED"
+new("TextLabel", {
+	Name = "CountBig",
+	AnchorPoint = Vector2.new(1, 0.5),
+	Position = UDim2.new(1, -14, 0.5, -8),
+	Size = UDim2.fromOffset(120, 22),
+	BackgroundTransparency = 1,
+	Text = "1,247",
+	Font = Enum.Font.GothamBold,
+	TextSize = 17,
+	TextColor3 = COLOR.TextPrimary,
+	TextXAlignment = Enum.TextXAlignment.Right,
+	TextYAlignment = Enum.TextYAlignment.Center,
+	ZIndex = 3,
+}, row6)
+new("TextLabel", {
+	Name = "CountLabel",
+	AnchorPoint = Vector2.new(1, 0.5),
+	Position = UDim2.new(1, -14, 0.5, 10),
+	Size = UDim2.fromOffset(120, 12),
+	BackgroundTransparency = 1,
+	Text = "COLLECTED",
+	Font = Enum.Font.GothamMedium,
+	TextSize = 9,
+	TextColor3 = Color3.fromRGB(255,255,255),
+	TextTransparency = whiteAlpha(0.4),
+	TextXAlignment = Enum.TextXAlignment.Right,
+	TextYAlignment = Enum.TextYAlignment.Center,
+	ZIndex = 3,
+}, row6)
+
+print("[ExampleHub Shell] Loaded — static visual only, no callbacks")
