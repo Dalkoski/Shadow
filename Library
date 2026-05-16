@@ -1463,10 +1463,10 @@ function Library:CreateWindow(opts)
     local function renderFooterText()
         local left = self._footerLeft or ""
         local right = self._footerRight or ""
-        if left ~= "" and right ~= "" then
-            footerText.Text = left .. "  |  " .. right
+        if right ~= "" then
+            footerText.Text = right
         else
-            footerText.Text = left ~= "" and left or right
+            footerText.Text = left
         end
     end
     self._renderFooterText = renderFooterText
