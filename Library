@@ -862,11 +862,18 @@ function Library:_showLoadingScreen(opts)
     }, container)
     corner(logoBox, 16)
     local logoStroke = stroke(logoBox, Color3.fromRGB(255,255,255), 1, 1)
-    local logoText = new("TextLabel", {
-        Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
-        Text = opts.LogoText or "L", Font = Enum.Font.GothamBold, TextSize = 32,
-        TextColor3 = COLOR.TextPrimary, TextTransparency = 1, ZIndex = 4,
-    }, logoBox)
+    local logoText, logoImg
+    if opts.LogoIcon then
+        logoImg = applyIcon(logoBox, opts.LogoIcon, 40, 0)
+        if logoImg then logoImg.ImageTransparency = 1 end
+    end
+    if not logoImg then
+        logoText = new("TextLabel", {
+            Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
+            Text = opts.LogoText or "L", Font = Enum.Font.GothamBold, TextSize = 32,
+            TextColor3 = COLOR.TextPrimary, TextTransparency = 1, ZIndex = 4,
+        }, logoBox)
+    end
 
     local textCol = new("Frame", {
         Size = UDim2.fromOffset(280, 72), BackgroundTransparency = 1,
@@ -891,7 +898,8 @@ function Library:_showLoadingScreen(opts)
     tween(container, 0.5, { Position = UDim2.fromScale(0.5, 0.5) }, Enum.EasingStyle.Quart)
     tween(logoBox, 0.4, { BackgroundTransparency = wA(0.08) })
     tween(logoStroke, 0.4, { Transparency = wA(0.15) })
-    tween(logoText, 0.4, { TextTransparency = 0 })
+    if logoText then tween(logoText, 0.4, { TextTransparency = 0 }) end
+    if logoImg then tween(logoImg, 0.4, { ImageTransparency = 0 }) end
     task.wait(0.1)
     tween(nameLbl, 0.4, { TextTransparency = 0 })
     task.wait(0.05)
@@ -903,7 +911,8 @@ function Library:_showLoadingScreen(opts)
     tween(container, 0.4, { Position = UDim2.fromScale(0.5, 0.45) }, Enum.EasingStyle.Quart)
     tween(logoBox, 0.3, { BackgroundTransparency = 1 })
     tween(logoStroke, 0.3, { Transparency = 1 })
-    tween(logoText, 0.3, { TextTransparency = 1 })
+    if logoText then tween(logoText, 0.3, { TextTransparency = 1 }) end
+    if logoImg then tween(logoImg, 0.3, { ImageTransparency = 1 }) end
     tween(nameLbl, 0.3, { TextTransparency = 1 })
     tween(subLbl, 0.3, { TextTransparency = 1 })
     task.wait(0.42)
@@ -1236,6 +1245,7 @@ function Library:CreateWindow(opts)
             Name = opts.LoadingTitle or opts.Name or "Library",
             Subtitle = opts.LoadingSubtitle or opts.Subtitle or "",
             LogoText = opts.LogoText or string.sub(opts.Name or "L", 1, 1):upper(),
+            LogoIcon = opts.LogoIcon,
             Duration = opts.LoadingDuration or 1.4,
         })
     end
@@ -1266,6 +1276,7 @@ function Library:CreateWindow(opts)
     self.Name = opts.Name or "Library"
     self.Subtitle = opts.Subtitle or "v1.0"
     self.LogoText = opts.LogoText or string.sub(self.Name, 1, 1):upper()
+    self.LogoIcon = opts.LogoIcon
     self.Tabs = {}
     self.ActiveTab = nil
     self.Config = opts.ConfigurationSaving or { Enabled = false }
@@ -1334,10 +1345,16 @@ function Library:CreateWindow(opts)
     }, titleLeft)
     corner(logoBox, 6)
     stroke(logoBox, Color3.fromRGB(255,255,255), wA(0.10), 1)
-    new("TextLabel", {
-        Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = self.LogoText,
-        Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = COLOR.TextPrimary, ZIndex = 4,
-    }, logoBox)
+    self._logoBox = logoBox
+    if self.LogoIcon then
+        self._logoImg = applyIcon(logoBox, self.LogoIcon, 16, 0.95)
+    end
+    if not self._logoImg then
+        self._logoLabel = new("TextLabel", {
+            Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = self.LogoText,
+            Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = COLOR.TextPrimary, ZIndex = 4,
+        }, logoBox)
+    end
     new("TextLabel", {
         Size = UDim2.fromOffset(80, 24), BackgroundTransparency = 1, Text = self.Name,
         Font = Enum.Font.GothamMedium, TextSize = 13, TextColor3 = COLOR.TextPrimary,
@@ -1625,21 +1642,29 @@ function Library:CreateWindow(opts)
     mobilePrompt.MouseButton1Click:Connect(function() self:SetVisibility(true) end)
     self._mobilePrompt = mobilePrompt
 
+    local dragGui = new("ScreenGui", {
+        Name = LIBRARY_CONFIG.StealthMode and randName(12) or "Library_DragBar",
+        ResetOnSpawn = false, IgnoreGuiInset = true,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 1001,
+    })
+    safeParent(dragGui)
+    self._dragGui = dragGui
+
     local dragBar = new("Frame", {
         Name = "DragBar", AnchorPoint = Vector2.new(0.5, 0),
-        Size = UDim2.fromOffset(110, 5),
+        Size = UDim2.fromOffset(120, 6),
         BackgroundColor3 = Color3.fromRGB(255,255,255),
-        BackgroundTransparency = 0.45, BorderSizePixel = 0,
-        ZIndex = 1000, Visible = true,
-    }, gui)
+        BackgroundTransparency = 0.4, BorderSizePixel = 0,
+        Visible = true,
+    }, dragGui)
     corner(dragBar, 3)
     local dragHit = new("TextButton", {
-        AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, -8),
-        Size = UDim2.fromOffset(160, 26), BackgroundTransparency = 1,
-        Text = "", AutoButtonColor = false, ZIndex = 1000,
+        AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, -4),
+        Size = UDim2.fromOffset(170, 22), BackgroundTransparency = 1,
+        Text = "", AutoButtonColor = false,
     }, dragBar)
     self._dragBar = dragBar
-    local BAR_GAP = 14
+    local BAR_GAP = 18
     local function updateBarPos()
         if not window or not window.Parent then return end
         local p = window.AbsolutePosition
@@ -1663,19 +1688,19 @@ function Library:CreateWindow(opts)
     updateBarPos()
     makeDraggable(window, dragHit, function() return self._hidden end)
     dragHit.MouseEnter:Connect(function()
-        tween(dragBar, 0.18, { Size = UDim2.fromOffset(130, 6), BackgroundTransparency = 0.2 })
+        tween(dragBar, 0.18, { Size = UDim2.fromOffset(140, 7), BackgroundTransparency = 0.18 })
     end)
     dragHit.MouseLeave:Connect(function()
-        tween(dragBar, 0.22, { Size = UDim2.fromOffset(110, 5), BackgroundTransparency = 0.45 })
+        tween(dragBar, 0.22, { Size = UDim2.fromOffset(120, 6), BackgroundTransparency = 0.4 })
     end)
     dragHit.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
             or input.UserInputType == Enum.UserInputType.Touch then
-            tween(dragBar, 0.15, { Size = UDim2.fromOffset(140, 7), BackgroundTransparency = 0.05 })
+            tween(dragBar, 0.15, { Size = UDim2.fromOffset(150, 8), BackgroundTransparency = 0.05 })
             local ended
             ended = input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
-                    tween(dragBar, 0.25, { Size = UDim2.fromOffset(110, 5), BackgroundTransparency = 0.45 })
+                    tween(dragBar, 0.25, { Size = UDim2.fromOffset(120, 6), BackgroundTransparency = 0.4 })
                     ended:Disconnect()
                 end
             end)
@@ -1725,6 +1750,7 @@ function Window:Hide()
     mainTween.Completed:Connect(function()
         if self._hidden and w then w.Visible = false end
     end)
+    if self._dragGui then self._dragGui.Enabled = false end
     if self._dragBar then self._dragBar.Visible = false end
     if self._mobilePrompt then self._mobilePrompt.Visible = true end
 end
@@ -1752,6 +1778,7 @@ function Window:Unhide()
     if self._glow then tween(self._glow, 0.5, { BackgroundTransparency = 0 }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out) end
     if self._shadow then tween(self._shadow, 0.5, { BackgroundTransparency = 0 }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out) end
     self._restorePos = nil
+    if self._dragGui then self._dragGui.Enabled = true end
     if self._dragBar then self._dragBar.Visible = true end
     if self._mobilePrompt then self._mobilePrompt.Visible = false end
 end
@@ -1779,6 +1806,9 @@ function Window:Destroy()
     if self._dragBar then
         tween(self._dragBar, 0.2, { BackgroundTransparency = 1, Size = UDim2.fromOffset(60, 3) })
     end
+    if self._dragGui then
+        task.delay(0.3, function() if self._dragGui then self._dragGui:Destroy() end end)
+    end
     local mainTween = tween(w, dur, {
         Size = UDim2.fromOffset(absSize.X * 0.7, absSize.Y * 0.7),
         BackgroundTransparency = 1,
@@ -1805,6 +1835,28 @@ end
 
 function Window:SetSectionTitle(text)
     if self.SectionTitle then self.SectionTitle.Text = text end
+end
+
+function Window:SetLogo(value)
+    if not self._logoBox then return end
+    local isIcon = type(value) == "string" and (#value > 1 or value:match("^%d+$") or value:sub(1,4) == "http" or value:sub(1,8) == "rbxasset")
+    if isIcon or type(value) == "number" then
+        if self._logoLabel then self._logoLabel:Destroy(); self._logoLabel = nil end
+        if self._logoImg then self._logoImg:Destroy(); self._logoImg = nil end
+        self._logoImg = applyIcon(self._logoBox, value, 16, 0.95)
+        self.LogoIcon = value
+    else
+        if self._logoImg then self._logoImg:Destroy(); self._logoImg = nil end
+        self.LogoText = tostring(value or "")
+        if self._logoLabel then
+            self._logoLabel.Text = self.LogoText
+        else
+            self._logoLabel = new("TextLabel", {
+                Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = self.LogoText,
+                Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = COLOR.TextPrimary, ZIndex = 4,
+            }, self._logoBox)
+        end
+    end
 end
 
 local function isLightTheme()
