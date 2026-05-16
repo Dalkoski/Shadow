@@ -1,6 +1,6 @@
 --[[
 	╔══════════════════════════════════════════════════════════╗
-	║                    VaenHub v3.5                          ║
+	║                    VaenHub v3.6                          ║
 	║       Final polish + spec fixes — by Dalkoski            ║
 	╚══════════════════════════════════════════════════════════╝
 ]]
@@ -48,7 +48,7 @@ local RADIUS = 8
 --==============================================================
 -- ROOT + FORWARD DECLS
 --==============================================================
-local VaenHub = { Version = "3.5.0", Flags = {}, Windows = {} }
+local VaenHub = { Version = "3.6.0", Flags = {}, Windows = {} }
 local Window = {}
 local Tab = {}
 local Elem = {}
@@ -127,17 +127,17 @@ local GLYPHS = {
 -- Lucide-style icon asset IDs (community-uploaded, no dev account needed)
 local LUCIDE = {
 	bolt    = "rbxassetid://10734950309",  -- lightning bolt → Main
-	user    = "rbxassetid://10747373183",  -- person → Player
-	eye     = "rbxassetid://10723345518",  -- eye → Visuals
+	user    = "rbxassetid://10747373183",  -- person → Player (spec)
+	eye     = "rbxassetid://10723345518",  -- eye → Visuals (spec)
 	shield  = "rbxassetid://10723346957",  -- shield → Protect
-	flame   = "rbxassetid://10734898355",  -- flame
-	target  = "rbxassetid://10734977449",  -- crosshair
-	chevron = "rbxassetid://10734894900",  -- chevron-down
-	arrow   = "rbxassetid://10734895698",  -- chevron-right
-	search  = "rbxassetid://10747384394",  -- search
-	cog     = "rbxassetid://10734924532",  -- settings cog
-	x       = "rbxassetid://10747375965",  -- close X
-	minus   = "rbxassetid://10734916534",  -- minus dash
+	flame   = "rbxassetid://10734898355",
+	target  = "rbxassetid://10734977449",
+	chevron = "rbxassetid://10734894900",
+	arrow   = "rbxassetid://10734895698",
+	search  = "rbxassetid://9723793096",   -- spec
+	cog     = "rbxassetid://10734924532",
+	x       = "rbxassetid://10747375965",
+	minus   = "rbxassetid://10734916534",
 }
 
 --==============================================================
@@ -157,7 +157,7 @@ function VaenHub:CreateWindow(cfg)
 		_protect = cfg.Protect or {},
 		_configSave = cfg.Config or {},
 		_name = cfg.Name or "VaenHub",
-		_version = cfg.Version or "v3.5",
+		_version = cfg.Version or "v3.6",
 		_currentTab = nil,
 		_tabOrder = 0,
 	}, {__index = Window})
@@ -666,7 +666,7 @@ function VaenHub:_BuildWindow(win)
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(WINDOW_W, WINDOW_H),
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundColor3 = Color3.fromRGB(15, 13, 25),
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
 		ZIndex = 1,
@@ -674,15 +674,18 @@ function VaenHub:_BuildWindow(win)
 	corner(main, 12)
 	stroke(main, Color3.fromRGB(255,255,255), 0.9)
 
-	-- 45deg purple gradient — punchy keypoints, white base lets gradient color through fully
-	new("UIGradient", {
-		Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0.0, Color3.fromRGB(42, 32, 78)),   -- vibrant violet top-left
-			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(22, 16, 38)),   -- mid
-			ColorSequenceKeypoint.new(1.0, Color3.fromRGB(8,  6,  16)),   -- near-black bottom-right
-		}),
-		Rotation = 45,
+	-- Radial glow background (ImageLabel approach per spec)
+	local bgGlow = new("ImageLabel", {
+		Name = "BgGlow",
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundTransparency = 1,
+		Image = "rbxassetid://6015886855",
+		ImageColor3 = Color3.fromRGB(60, 45, 110),
+		ImageTransparency = 0.4,
+		ScaleType = Enum.ScaleType.Stretch,
+		ZIndex = 1,
 	}, main)
+	corner(bgGlow, 12)
 
 	win._main = main
 
@@ -824,12 +827,37 @@ function VaenHub:_BuildWindow(win)
 		return b
 	end
 
+	local function topImgBtn(name, assetId, layoutOrder)
+		local container = new("Frame", {
+			Name = name,
+			Size = UDim2.fromOffset(28, 28),
+			BackgroundTransparency = 1,
+			LayoutOrder = layoutOrder,
+			ZIndex = 10,
+		}, btnRow)
+
+		local b = new("ImageButton", {
+			Size = UDim2.fromOffset(18, 18),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			BackgroundTransparency = 1,
+			Image = assetId,
+			ImageColor3 = THEME.TextDim,
+			ScaleType = Enum.ScaleType.Fit,
+			AutoButtonColor = false,
+			ZIndex = 11,
+		}, container)
+
+		b.MouseEnter:Connect(function() tween(b, 0.15, {ImageColor3 = THEME.Text}, Enum.EasingStyle.Quad) end)
+		b.MouseLeave:Connect(function() tween(b, 0.15, {ImageColor3 = THEME.TextDim}, Enum.EasingStyle.Quad) end)
+		return b
+	end
+
 	-- Order left-to-right: Search, Settings, Min, Close
-	-- Glyphs verified to render in Gotham font (no broken squares):
-	local searchBtn = topBtn("Search",   "⌕", 20, 1)  -- U+2315 magnifier
-	local cogBtn    = topBtn("Settings", "⚙", 18, 2)  -- U+2699 gear
-	local miniBtn   = topBtn("Mini",     "–", 22, 3)  -- U+2013 en-dash (cleaner than minus)
-	local closeBtn  = topBtn("Close",    "×", 22, 4)  -- U+00D7 multiplication sign
+	local searchBtn = topImgBtn("Search",  "rbxassetid://9723793096", 1)
+	local cogBtn    = topBtn("Settings", "⚙", 18, 2)
+	local miniBtn   = topBtn("Mini",     "–", 22, 3)
+	local closeBtn  = topBtn("Close",    "×", 22, 4)
 
 	closeBtn.MouseButton1Click:Connect(function() win:Destroy() end)
 	miniBtn.MouseButton1Click:Connect(function() win:Minimise() end)
@@ -922,13 +950,36 @@ function VaenHub:_BuildTab(win, t)
 	-- No gradient overlay on tabs (keeps active fill solid violet per spec)
 	local btnStroke = nil
 
-	-- Icon resolution: GLYPHS first (guaranteed render in Gotham) → LUCIDE asset → raw asset
+	-- Tab icon resolution: LUCIDE asset IDs first (per spec), GLYPHS as fallback
 	local iconLbl
 	local labelX = 12
 	if t._icon then
 		local iconStr = tostring(t._icon)
-		-- Priority 1: Glyph (always renders, no asset failure)
-		if GLYPHS[iconStr] then
+		-- Priority 1: LUCIDE dictionary (per spec asset IDs)
+		if LUCIDE[iconStr] then
+			iconLbl = new("ImageLabel", {
+				AnchorPoint = Vector2.new(0, 0.5),
+				Size = UDim2.fromOffset(16, 16),
+				Position = UDim2.new(0, 12, 0.5, 0),
+				BackgroundTransparency = 1,
+				Image = LUCIDE[iconStr],
+				ImageColor3 = Color3.fromRGB(140, 140, 155),
+			}, btn)
+			labelX = 34
+		-- Priority 2: raw asset path
+		elseif iconStr:match("^rbxasset") or iconStr:match("^rbxassetid") or iconStr:match("^%d+$") then
+			local src = (iconStr:match("^rbxasset") or iconStr:match("^rbxassetid")) and iconStr or ("rbxassetid://" .. iconStr)
+			iconLbl = new("ImageLabel", {
+				AnchorPoint = Vector2.new(0, 0.5),
+				Size = UDim2.fromOffset(16, 16),
+				Position = UDim2.new(0, 12, 0.5, 0),
+				BackgroundTransparency = 1,
+				Image = src,
+				ImageColor3 = Color3.fromRGB(140, 140, 155),
+			}, btn)
+			labelX = 34
+		-- Priority 3: glyph fallback
+		elseif GLYPHS[iconStr] then
 			iconLbl = new("TextLabel", {
 				AnchorPoint = Vector2.new(0, 0.5),
 				Size = UDim2.fromOffset(16, 28),
@@ -942,29 +993,6 @@ function VaenHub:_BuildTab(win, t)
 				TextYAlignment = Enum.TextYAlignment.Center,
 			}, btn)
 			labelX = 32
-		-- Priority 2: LUCIDE dictionary lookup
-		elseif LUCIDE[iconStr] then
-			iconLbl = new("ImageLabel", {
-				AnchorPoint = Vector2.new(0, 0.5),
-				Size = UDim2.fromOffset(16, 16),
-				Position = UDim2.new(0, 12, 0.5, 0),
-				BackgroundTransparency = 1,
-				Image = LUCIDE[iconStr],
-				ImageColor3 = Color3.fromRGB(140, 140, 155),
-			}, btn)
-			labelX = 34
-		-- Priority 3: raw asset path
-		elseif iconStr:match("^rbxasset") or iconStr:match("^rbxassetid") or iconStr:match("^%d+$") then
-			local src = (iconStr:match("^rbxasset") or iconStr:match("^rbxassetid")) and iconStr or ("rbxassetid://" .. iconStr)
-			iconLbl = new("ImageLabel", {
-				AnchorPoint = Vector2.new(0, 0.5),
-				Size = UDim2.fromOffset(16, 16),
-				Position = UDim2.new(0, 12, 0.5, 0),
-				BackgroundTransparency = 1,
-				Image = src,
-				ImageColor3 = Color3.fromRGB(140, 140, 155),
-			}, btn)
-			labelX = 34
 		end
 	end
 
