@@ -92,6 +92,7 @@ local function applyIcon(parent, icon, size, alpha)
                 ImageRectOffset = Vector2.new(d[3][1], d[3][2]),
             })
         end
+        if Lucide then return nil end
         return new("TextLabel", {
             Name = "Icon",
             AnchorPoint = Vector2.new(0.5, 0.5),
@@ -505,19 +506,27 @@ function Library:CreateWindow(opts)
     }, gui)
     corner(window, 14)
     stroke(window, Color3.fromRGB(255,255,255), wA(0.05), 1)
+
+    local glow = new("Frame", {
+        Name = "Glow", Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = Color3.fromRGB(255,255,255),
+        BackgroundTransparency = 0, BorderSizePixel = 0, ZIndex = 1,
+    }, window)
+    corner(glow, 14)
     new("UIGradient", {
-        Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,255)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,255)),
-        }),
+        Color = ColorSequence.new(Color3.fromRGB(255,255,255)),
         Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.85),
-            NumberSequenceKeypoint.new(0.5, 0.96),
+            NumberSequenceKeypoint.new(0, 0.92),
+            NumberSequenceKeypoint.new(0.5, 0.98),
             NumberSequenceKeypoint.new(1, 1),
         }),
         Rotation = 135,
-    }, window)
+    }, glow)
     self.Window = window
+    self._glow = glow
+
+    window.Size = UDim2.fromOffset(WW * 0.9, WH * 0.9)
+    tween(window, 0.45, { Size = self._normalSize }, Enum.EasingStyle.Back)
 
     local TBH = 44
     local titlebar = new("Frame", {
@@ -737,14 +746,23 @@ end
 function Window:Hide()
     if self._hidden then return end
     self._hidden = true
-    self.Window.Visible = false
+    local w = self.Window
+    tween(w, 0.25, {
+        Size = UDim2.fromOffset(w.AbsoluteSize.X * 0.92, w.AbsoluteSize.Y * 0.92),
+    }, Enum.EasingStyle.Quart)
+    task.delay(0.26, function()
+        if self._hidden and w then w.Visible = false end
+    end)
     if self._mobilePrompt then self._mobilePrompt.Visible = true end
 end
 
 function Window:Unhide()
     if not self._hidden then return end
     self._hidden = false
-    self.Window.Visible = true
+    local w = self.Window
+    w.Visible = true
+    w.Size = UDim2.fromOffset(self._normalSize.X.Offset * 0.92, self._normalSize.Y.Offset * 0.92)
+    tween(w, 0.35, { Size = self._normalSize }, Enum.EasingStyle.Back)
     if self._mobilePrompt then self._mobilePrompt.Visible = false end
 end
 
@@ -759,7 +777,12 @@ end
 function Window:Destroy()
     if self._destroyed then return end
     self._destroyed = true
-    if self.Gui then self.Gui:Destroy() end
+    if not self.Window or not self.Gui then return end
+    local w = self.Window
+    tween(w, 0.28, {
+        Size = UDim2.fromOffset(w.AbsoluteSize.X * 0.9, w.AbsoluteSize.Y * 0.9),
+    }, Enum.EasingStyle.Quart)
+    task.delay(0.3, function() if self.Gui then self.Gui:Destroy() end end)
 end
 
 function Window:SetSectionTitle(text)
@@ -942,6 +965,8 @@ function Window:_showTab(tab, title)
     end
     if self._settingsTab then self._settingsTab.Panel.Visible = false end
     tab.Panel.Visible = true
+    tab.Panel.Position = UDim2.fromOffset(0, 8)
+    tween(tab.Panel, 0.3, { Position = UDim2.fromOffset(0, 0) }, Enum.EasingStyle.Quart)
     if tab.Button then
         tween(tab.Button, 0.2, { BackgroundTransparency = wA(0.06) })
         tween(tab.BtnStroke, 0.2, { Transparency = wA(0.08) })
@@ -951,7 +976,11 @@ function Window:_showTab(tab, title)
         end
         tween(tab.BtnLabel, 0.2, { TextTransparency = 0 })
     end
-    self:SetSectionTitle(title or tab._name)
+    if self.SectionTitle then
+        self.SectionTitle.TextTransparency = 1
+        self.SectionTitle.Text = title or tab._name
+        tween(self.SectionTitle, 0.25, { TextTransparency = 0 })
+    end
 end
 
 function Window:CreateTab(name, icon)
@@ -1067,8 +1096,15 @@ end
 local function attachHover(card, base, hover)
     base = base or wA(0.025)
     hover = hover or wA(0.05)
-    card.MouseEnter:Connect(function() tween(card, 0.15, { BackgroundTransparency = hover }) end)
-    card.MouseLeave:Connect(function() tween(card, 0.15, { BackgroundTransparency = base }) end)
+    local st = card:FindFirstChildOfClass("UIStroke")
+    card.MouseEnter:Connect(function()
+        tween(card, 0.15, { BackgroundTransparency = hover })
+        if st then tween(st, 0.15, { Transparency = wA(0.12) }) end
+    end)
+    card.MouseLeave:Connect(function()
+        tween(card, 0.15, { BackgroundTransparency = base })
+        if st then tween(st, 0.15, { Transparency = wA(0.06) }) end
+    end)
 end
 
 local function registerFlag(win, flag, element)
