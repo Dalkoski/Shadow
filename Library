@@ -2,9 +2,9 @@ local LIBRARY_CONFIG = {
     GlowWhite = {
         Color = Color3.fromRGB(255, 255, 255),
         Stops = {
-            { 0,    0.82 },
-            { 0.25, 0.90 },
-            { 0.55, 0.96 },
+            { 0,    0.88 },
+            { 0.25, 0.93 },
+            { 0.55, 0.97 },
             { 1,    1    },
         },
         Rotation = 45,
@@ -12,10 +12,10 @@ local LIBRARY_CONFIG = {
     ShadowBlack = {
         Color = Color3.fromRGB(0, 0, 0),
         Stops = {
-            { 0,    1    },
-            { 0.45, 0.98 },
-            { 0.8,  0.88 },
-            { 1,    0.74 },
+            { 0,    0.94 },
+            { 0.45, 0.96 },
+            { 0.8,  0.86 },
+            { 1,    0.72 },
         },
         Rotation = 45,
     },
@@ -380,7 +380,7 @@ local Library = {
     Config = LIBRARY_CONFIG,
     Flags = {},
     _windows = {},
-    _loaderUrl = "https://raw.githubusercontent.com/Dalkoski/Phantom/refs/heads/main/Library",
+    _loaderUrl = "https://raw.githubusercontent.com/Dalkoski/Shadow/refs/heads/main/Library",
     Theme = THEMES,
     Themes = THEMES,
     ToggleKey = Enum.KeyCode.K,
@@ -911,12 +911,17 @@ function Library:_showLoadingScreen(opts)
 end
 
 function Library:_promptKey(opts, onSuccess, onCancel)
-    local keys = type(opts.Key) == "string" and { opts.Key } or opts.Key
+    local keys
+    if type(opts.Key) == "string" then keys = { opts.Key }
+    elseif type(opts.Key) == "table" then keys = opts.Key
+    else keys = {} end
+    local hasValidate = type(opts.Validate) == "function"
+    local hasGetKey   = type(opts.GetKey) == "function"
     local fileName = opts.FileName or "Key"
     local folder = "Library/Keys"
     safeMkdir("Library"); safeMkdir(folder)
     local path = folder .. "/" .. fileName .. ".key"
-    if opts.SaveKey then
+    if opts.SaveKey and not hasValidate then
         local saved = safeRead(path)
         if saved then
             for _, k in ipairs(keys) do if saved == k then onSuccess(); return end end
@@ -934,7 +939,10 @@ function Library:_promptKey(opts, onSuccess, onCancel)
         BorderSizePixel = 0, ZIndex = 1,
     }, gui)
 
-    local MW, MH = 440, 280
+    local MW, MH = 440, hasGetKey and 320 or 280
+    local INPUT_Y = hasGetKey and 162 or 132
+    local ERR_Y   = INPUT_Y + 40
+    local BTN_Y   = MH - 60
     local modal = new("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
         Size = UDim2.fromOffset(MW * 0.9, MH * 0.9), BackgroundColor3 = COLOR.BgDeep,
@@ -991,8 +999,25 @@ function Library:_promptKey(opts, onSuccess, onCancel)
         TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, ZIndex = 3,
     }, modal)
 
+    local getBtn, getBtnLbl
+    if hasGetKey then
+        getBtn = new("TextButton", {
+            Position = UDim2.fromOffset(20, 122), Size = UDim2.new(1, -40, 0, 30),
+            BackgroundColor3 = COLOR.Accent, BackgroundTransparency = 1,
+            BorderSizePixel = 0, Text = "", AutoButtonColor = false, ZIndex = 3,
+        }, modal)
+        corner(getBtn, 8)
+        getBtnLbl = new("TextLabel", {
+            Size = UDim2.fromScale(1,1), BackgroundTransparency = 1, Text = "Get Key",
+            Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = COLOR.KnobOn,
+            TextTransparency = 1, ZIndex = 4,
+        }, getBtn)
+        getBtn.MouseEnter:Connect(function() tween(getBtn, 0.15, { BackgroundTransparency = wA(0.85) }) end)
+        getBtn.MouseLeave:Connect(function() tween(getBtn, 0.15, { BackgroundTransparency = wA(1) }) end)
+    end
+
     local inputFrame = new("Frame", {
-        Position = UDim2.fromOffset(20, 132), Size = UDim2.new(1, -40, 0, 36),
+        Position = UDim2.fromOffset(20, INPUT_Y), Size = UDim2.new(1, -40, 0, 36),
         BackgroundColor3 = Color3.fromRGB(255,255,255), BackgroundTransparency = 1,
         BorderSizePixel = 0, ZIndex = 3,
     }, modal)
@@ -1009,8 +1034,19 @@ function Library:_promptKey(opts, onSuccess, onCancel)
     input.Focused:Connect(function() tween(inputStroke, 0.15, { Color = COLOR.Accent, Transparency = wA(0.4) }) end)
     input.FocusLost:Connect(function() tween(inputStroke, 0.15, { Color = Color3.fromRGB(255,255,255), Transparency = wA(0.12) }) end)
 
+    local errLbl
+    if hasValidate or hasGetKey then
+        errLbl = new("TextLabel", {
+            Position = UDim2.fromOffset(20, ERR_Y), Size = UDim2.new(1, -40, 0, 14),
+            BackgroundTransparency = 1, Text = "", TextTransparency = 1,
+            Font = Enum.Font.GothamMedium, TextSize = 11,
+            TextColor3 = COLOR.Danger, TextXAlignment = Enum.TextXAlignment.Center,
+            TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 3,
+        }, modal)
+    end
+
     local submit = new("TextButton", {
-        Position = UDim2.fromOffset(20, 188), Size = UDim2.new(0.5, -25, 0, 38),
+        Position = UDim2.fromOffset(20, BTN_Y), Size = UDim2.new(0.5, -25, 0, 38),
         BackgroundColor3 = COLOR.Accent, BackgroundTransparency = 1,
         BorderSizePixel = 0, Text = "", AutoButtonColor = false, ZIndex = 3,
     }, modal)
@@ -1024,7 +1060,7 @@ function Library:_promptKey(opts, onSuccess, onCancel)
     submit.MouseLeave:Connect(function() tween(submit, 0.15, { BackgroundTransparency = wA(1) }) end)
 
     local cancel = new("TextButton", {
-        AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -20, 0, 188),
+        AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -20, 0, BTN_Y),
         Size = UDim2.new(0.5, -25, 0, 38), BackgroundColor3 = Color3.fromRGB(255,255,255),
         BackgroundTransparency = 1, BorderSizePixel = 0,
         Text = "", AutoButtonColor = false, ZIndex = 3,
@@ -1047,6 +1083,8 @@ function Library:_promptKey(opts, onSuccess, onCancel)
     task.wait(0.05)
     tween(subtitle, 0.3, { TextTransparency = wA(0.5) })
     tween(noteLbl, 0.3, { TextTransparency = wA(0.45) })
+    if getBtn then tween(getBtn, 0.3, { BackgroundTransparency = wA(1) }) end
+    if getBtnLbl then tween(getBtnLbl, 0.3, { TextTransparency = 0 }) end
     tween(inputFrame, 0.3, { BackgroundTransparency = wA(0.05) })
     tween(inputStroke, 0.3, { Transparency = wA(0.12) })
     tween(input, 0.3, { TextTransparency = 0 })
@@ -1086,16 +1124,45 @@ function Library:_promptKey(opts, onSuccess, onCancel)
         closeAnim(false, function() if onCancel then onCancel() end end)
     end)
 
+    local function showStatus(text, color)
+        if not errLbl then return end
+        errLbl.Text = text or ""
+        errLbl.TextColor3 = color or COLOR.Danger
+        errLbl.TextTransparency = 1
+        tween(errLbl, 0.2, { TextTransparency = wA(0.9) })
+        task.delay(2.5, function()
+            if errLbl and errLbl.Parent then tween(errLbl, 0.5, { TextTransparency = 1 }) end
+        end)
+    end
+
     local function trySubmit()
         if closing then return end
         local text = input.Text
-        for _, k in ipairs(keys) do
-            if text == k then
-                if opts.SaveKey then safeWrite(path, text) end
-                closeAnim(true, function() onSuccess() end)
-                return
+        if text == "" then return end
+        local valid, errMsg = false, nil
+        if hasValidate then
+            local ok, res = pcall(opts.Validate, text)
+            if ok then
+                if type(res) == "table" then
+                    valid = res.success == true
+                    errMsg = res.error
+                else
+                    valid = res == true
+                end
+            else
+                errMsg = tostring(res)
+            end
+        else
+            for _, k in ipairs(keys) do
+                if text == k then valid = true; break end
             end
         end
+        if valid then
+            if opts.SaveKey and not hasValidate then safeWrite(path, text) end
+            closeAnim(true, function() onSuccess() end)
+            return
+        end
+        showStatus(errMsg or "Invalid key", COLOR.Danger)
         tween(inputStroke, 0.15, { Color = COLOR.Danger, Transparency = 0 })
         local origPos = modal.Position
         for _ = 1, 4 do
@@ -1110,6 +1177,18 @@ function Library:_promptKey(opts, onSuccess, onCancel)
     end
     submit.MouseButton1Click:Connect(trySubmit)
     input.FocusLost:Connect(function(enter) if enter then trySubmit() end end)
+
+    if getBtn then
+        getBtn.MouseButton1Click:Connect(function()
+            if closing then return end
+            local ok, a, b = pcall(opts.GetKey)
+            if ok and a then
+                showStatus(b or "Key link copied to clipboard", COLOR.Success)
+            else
+                showStatus((ok and b) or (not ok and tostring(a)) or "Try again later", COLOR.Warning)
+            end
+        end)
+    end
 end
 
 local Window = {}
@@ -1321,20 +1400,15 @@ function Library:CreateWindow(opts)
         BorderSizePixel = 0, ZIndex = 2,
     }, footer)
 
-    local footerCenter = new("Frame", {
-        Position = UDim2.fromOffset(SBW + 1, 0),
-        Size = UDim2.new(1, -SBW - 1, 1, 0),
-        BackgroundTransparency = 1, ZIndex = 2,
-    }, footer)
     local footerText = new("TextLabel", {
         AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.new(1, -40, 1, -4), BackgroundTransparency = 1,
+        Size = UDim2.new(1, -56, 1, -4), BackgroundTransparency = 1,
         Text = opts.Name or "Library",
         Font = Enum.Font.GothamMedium, TextSize = 10, TextColor3 = Color3.fromRGB(255,255,255),
         TextTransparency = wA(0.4),
         TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Center,
         TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 2,
-    }, footerCenter)
+    }, footer)
     self._footerText = footerText
     local function setFooterText()
         local left = opts.Name or "Library"
@@ -1556,24 +1630,37 @@ function Library:CreateWindow(opts)
         Size = UDim2.fromOffset(110, 5),
         BackgroundColor3 = Color3.fromRGB(255,255,255),
         BackgroundTransparency = 0.45, BorderSizePixel = 0,
-        ZIndex = 100, Visible = true,
+        ZIndex = 1000, Visible = true,
     }, gui)
     corner(dragBar, 3)
     local dragHit = new("TextButton", {
-        AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(160, 32), BackgroundTransparency = 1,
-        Text = "", AutoButtonColor = false, ZIndex = 100,
+        AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, -8),
+        Size = UDim2.fromOffset(160, 26), BackgroundTransparency = 1,
+        Text = "", AutoButtonColor = false, ZIndex = 1000,
     }, dragBar)
     self._dragBar = dragBar
+    local BAR_GAP = 14
     local function updateBarPos()
         if not window or not window.Parent then return end
         local p = window.AbsolutePosition
         local s = window.AbsoluteSize
-        dragBar.Position = UDim2.fromOffset(p.X + s.X / 2, p.Y + s.Y + 10)
+        dragBar.Position = UDim2.fromOffset(
+            math.floor(p.X + s.X / 2),
+            math.floor(p.Y + s.Y + BAR_GAP)
+        )
     end
     window:GetPropertyChangedSignal("AbsolutePosition"):Connect(updateBarPos)
     window:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateBarPos)
-    task.defer(updateBarPos)
+    local barConn
+    barConn = RunService.Heartbeat:Connect(function()
+        if not window or not window.Parent or self._destroyed then
+            if barConn then barConn:Disconnect(); barConn = nil end
+            return
+        end
+        updateBarPos()
+    end)
+    self._barConn = barConn
+    updateBarPos()
     makeDraggable(window, dragHit, function() return self._hidden end)
     dragHit.MouseEnter:Connect(function()
         tween(dragBar, 0.18, { Size = UDim2.fromOffset(130, 6), BackgroundTransparency = 0.2 })
