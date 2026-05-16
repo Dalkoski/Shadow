@@ -235,6 +235,69 @@ function Library:ServerHop()
     end
 end
 
+function Library:GetExecutor()
+    if identifyexecutor then
+        local ok, n, v = pcall(identifyexecutor)
+        if ok and n then
+            if v then return tostring(n), tostring(v) end
+            return tostring(n)
+        end
+    end
+    if getexecutorname then
+        local ok, n = pcall(getexecutorname)
+        if ok and n then return tostring(n) end
+    end
+    if syn and syn.protect_gui then return "Synapse X" end
+    if fluxus then return "Fluxus" end
+    if KRNL_LOADED or rawget(_G, "Krnl") then return "Krnl" end
+    if WAVE_VERSION or rawget(_G, "Wave") then return "Wave" end
+    if rawget(_G, "PROTOSMASHER_LOADED") then return "ProtoSmasher" end
+    if rawget(_G, "Sentinel") then return "Sentinel" end
+    if pcall(function() return Drawing.new("Square") end) then return "Unknown" end
+    return "Unknown"
+end
+
+function Library:CopyToClipboard(text)
+    local sc = rawget(_G, "setclipboard")
+        or (syn and syn.write_clipboard)
+        or rawget(_G, "toclipboard")
+        or rawget(_G, "set_clipboard")
+        or (Clipboard and Clipboard.set)
+    if not sc then return false end
+    return (pcall(sc, tostring(text)))
+end
+
+function Library:SendWebhook(url, content, opts)
+    if type(url) ~= "string" or url == "" then return false end
+    opts = opts or {}
+    local data = {
+        content = (not opts.Embed) and content or nil,
+        username = opts.Username,
+        avatar_url = opts.AvatarUrl,
+    }
+    if opts.Embed then
+        local e = opts.Embed
+        if type(e) == "string" then e = { description = e } end
+        if content and not e.description then e.description = content end
+        data.embeds = { e }
+    end
+    local req = (syn and syn.request)
+        or (fluxus and fluxus.request)
+        or (http and http.request)
+        or rawget(_G, "http_request")
+        or rawget(_G, "request")
+    if not req then return false end
+    local ok, res = pcall(req, {
+        Url = url, Method = "POST",
+        Headers = { ["Content-Type"] = "application/json" },
+        Body = HttpService:JSONEncode(data),
+    })
+    if not ok then return false end
+    local code = res and (res.StatusCode or res.Status or res.status_code)
+    if not code then return true end
+    return code >= 200 and code < 300
+end
+
 function Library:SetVisibility(v)
     for _, w in ipairs(self._windows) do
         if not w._destroyed then w:SetVisibility(v) end
@@ -265,10 +328,10 @@ local function getNotifGui()
     if not notifGui.Parent then notifGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
     local holder = new("Frame", {
         Name = "Holder", AnchorPoint = Vector2.new(1, 1),
-        Position = UDim2.new(1, -16, 1, -16), Size = UDim2.fromOffset(280, 400),
+        Position = UDim2.new(1, -20, 1, -20), Size = UDim2.fromOffset(340, 500),
         BackgroundTransparency = 1,
     }, notifGui)
-    local l = listV(holder, 8)
+    local l = listV(holder, 10)
     l.VerticalAlignment = Enum.VerticalAlignment.Bottom
     l.HorizontalAlignment = Enum.HorizontalAlignment.Right
     return notifGui
@@ -281,38 +344,153 @@ function Library:Notify(opts)
         Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundColor3 = COLOR.BgDeep, BorderSizePixel = 0, ClipsDescendants = true,
     }, holder)
-    corner(card, 10)
-    stroke(card, Color3.fromRGB(255,255,255), wA(0.08), 1)
-    pad(card, 10, 12, 10, 12)
-    new("Frame", { Size = UDim2.new(0, 3, 1, -8), Position = UDim2.fromOffset(0, 4),
-        BackgroundColor3 = opts.Accent or COLOR.TextPrimary, BorderSizePixel = 0 }, card)
-    if opts.Image then
-        local iconHolder = new("Frame", {
-            Size = UDim2.fromOffset(18, 18), Position = UDim2.fromOffset(10, 0),
-            BackgroundTransparency = 1,
+    corner(card, 12)
+    stroke(card, Color3.fromRGB(255,255,255), wA(0.1), 1)
+    pad(card, 14, 16, 14, 16)
+
+    local glow = new("Frame", {
+        Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(255,255,255),
+        BackgroundTransparency = 0, BorderSizePixel = 0, ZIndex = 1,
+    }, card)
+    corner(glow, 12)
+    new("UIGradient", {
+        Color = ColorSequence.new(opts.Accent or COLOR.Accent),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.88),
+            NumberSequenceKeypoint.new(0.5, 0.97),
+            NumberSequenceKeypoint.new(1, 1),
+        }),
+        Rotation = 135,
+    }, glow)
+
+    local hasIcon = opts.Image and opts.Image ~= ""
+    if hasIcon then
+        local iconBox = new("Frame", {
+            Position = UDim2.fromOffset(0, 2), Size = UDim2.fromOffset(34, 34),
+            BackgroundColor3 = Color3.fromRGB(255,255,255), BackgroundTransparency = wA(0.06),
+            BorderSizePixel = 0, ZIndex = 2,
         }, card)
-        applyIcon(iconHolder, opts.Image, 16, 0.8)
+        corner(iconBox, 8)
+        stroke(iconBox, Color3.fromRGB(255,255,255), wA(0.08), 1)
+        applyIcon(iconBox, opts.Image, 20, 0.9)
     end
-    new("TextLabel", {
-        Size = UDim2.new(1, -10, 0, 16), Position = UDim2.fromOffset(opts.Image and 34 or 10, 0),
+
+    local titleLbl = new("TextLabel", {
+        Position = UDim2.fromOffset(hasIcon and 46 or 0, 0),
+        Size = UDim2.new(1, hasIcon and -46 or 0, 0, 16),
         BackgroundTransparency = 1, Text = opts.Title or "Notification",
-        Font = Enum.Font.GothamMedium, TextSize = 12, TextColor3 = COLOR.TextPrimary,
-        TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top,
+        Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = COLOR.TextPrimary,
+        TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, ZIndex = 2,
     }, card)
-    new("TextLabel", {
-        Size = UDim2.new(1, -10, 0, 0), Position = UDim2.fromOffset(10, 18),
-        AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Text = opts.Content or "",
-        Font = Enum.Font.Gotham, TextSize = 11, TextColor3 = Color3.fromRGB(255,255,255),
-        TextTransparency = wA(0.7), TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true,
+    local descLbl = new("TextLabel", {
+        Position = UDim2.fromOffset(hasIcon and 46 or 0, 20),
+        Size = UDim2.new(1, hasIcon and -46 or 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1,
+        Text = opts.Content or "",
+        Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = Color3.fromRGB(255,255,255),
+        TextTransparency = wA(0.65), TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, ZIndex = 2,
     }, card)
-    card.Position = UDim2.new(1, 50, 0, 0)
-    tween(card, 0.3, { Position = UDim2.new(0, 0, 0, 0) }, Enum.EasingStyle.Quint)
+
+    card.Position = UDim2.new(1, 60, 0, 0)
+    tween(card, 0.4, { Position = UDim2.new(0, 0, 0, 0) }, Enum.EasingStyle.Quint)
     task.delay(opts.Duration or 4, function()
         if not card.Parent then return end
-        local tw = tween(card, 0.25, { Position = UDim2.new(1, 50, 0, 0) }, Enum.EasingStyle.Quint)
+        tween(titleLbl, 0.2, { TextTransparency = 1 })
+        tween(descLbl, 0.2, { TextTransparency = 1 })
+        local tw = tween(card, 0.35, { Position = UDim2.new(1, 60, 0, 0) }, Enum.EasingStyle.Quint)
         tw.Completed:Wait(); card:Destroy()
     end)
+end
+
+function Library:_showLoadingScreen(opts)
+    opts = opts or {}
+    local existing = CoreGui:FindFirstChild("Library_Loading")
+    if existing then existing:Destroy() end
+    local gui = new("ScreenGui", {
+        Name = "Library_Loading", ResetOnSpawn = false,
+        IgnoreGuiInset = true, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 99998,
+    })
+    pcall(function() gui.Parent = CoreGui end)
+    if not gui.Parent then gui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+
+    local backdrop = new("Frame", {
+        Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = COLOR.BgDeep, BackgroundTransparency = 1,
+        BorderSizePixel = 0, ZIndex = 1,
+    }, gui)
+    local backdropGlow = new("Frame", {
+        Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(255,255,255),
+        BackgroundTransparency = 0, BorderSizePixel = 0, ZIndex = 2,
+    }, backdrop)
+    new("UIGradient", {
+        Color = ColorSequence.new(COLOR.Accent),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.85),
+            NumberSequenceKeypoint.new(0.4, 0.95),
+            NumberSequenceKeypoint.new(1, 1),
+        }),
+        Rotation = 135,
+    }, backdropGlow)
+
+    local container = new("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.55),
+        Size = UDim2.fromOffset(420, 90), BackgroundTransparency = 1, ZIndex = 3,
+    }, gui)
+    local layout = listH(container, 18, Enum.VerticalAlignment.Center, Enum.HorizontalAlignment.Center)
+
+    local logoBox = new("Frame", {
+        Size = UDim2.fromOffset(72, 72), BackgroundColor3 = Color3.fromRGB(255,255,255),
+        BackgroundTransparency = 1, BorderSizePixel = 0, LayoutOrder = 1, ZIndex = 3,
+    }, container)
+    corner(logoBox, 16)
+    local logoStroke = stroke(logoBox, Color3.fromRGB(255,255,255), 1, 1)
+    local logoText = new("TextLabel", {
+        Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
+        Text = opts.LogoText or "L", Font = Enum.Font.GothamBold, TextSize = 32,
+        TextColor3 = COLOR.TextPrimary, TextTransparency = 1, ZIndex = 4,
+    }, logoBox)
+
+    local textCol = new("Frame", {
+        Size = UDim2.fromOffset(280, 72), BackgroundTransparency = 1,
+        LayoutOrder = 2, ZIndex = 3,
+    }, container)
+    local nameLbl = new("TextLabel", {
+        Position = UDim2.fromOffset(0, 16), Size = UDim2.new(1, 0, 0, 28),
+        BackgroundTransparency = 1, Text = opts.Name or "Library",
+        Font = Enum.Font.GothamBold, TextSize = 30, TextColor3 = COLOR.TextPrimary,
+        TextTransparency = 1, TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center, ZIndex = 4,
+    }, textCol)
+    local subLbl = new("TextLabel", {
+        Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 0, 16),
+        BackgroundTransparency = 1, Text = opts.Subtitle or "",
+        Font = Enum.Font.Gotham, TextSize = 13, TextColor3 = Color3.fromRGB(255,255,255),
+        TextTransparency = 1, TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center, ZIndex = 4,
+    }, textCol)
+
+    tween(backdrop, 0.3, { BackgroundTransparency = 0 })
+    tween(container, 0.5, { Position = UDim2.fromScale(0.5, 0.5) }, Enum.EasingStyle.Quart)
+    tween(logoBox, 0.4, { BackgroundTransparency = wA(0.08) })
+    tween(logoStroke, 0.4, { Transparency = wA(0.15) })
+    tween(logoText, 0.4, { TextTransparency = 0 })
+    task.wait(0.1)
+    tween(nameLbl, 0.4, { TextTransparency = 0 })
+    task.wait(0.05)
+    tween(subLbl, 0.4, { TextTransparency = wA(0.5) })
+
+    task.wait(opts.Duration or 1.4)
+
+    tween(backdrop, 0.4, { BackgroundTransparency = 1 })
+    tween(container, 0.4, { Position = UDim2.fromScale(0.5, 0.45) }, Enum.EasingStyle.Quart)
+    tween(logoBox, 0.3, { BackgroundTransparency = 1 })
+    tween(logoStroke, 0.3, { Transparency = 1 })
+    tween(logoText, 0.3, { TextTransparency = 1 })
+    tween(nameLbl, 0.3, { TextTransparency = 1 })
+    tween(subLbl, 0.3, { TextTransparency = 1 })
+    task.wait(0.42)
+    gui:Destroy()
 end
 
 function Library:_promptKey(opts, onSuccess, onCancel)
@@ -346,21 +524,21 @@ function Library:_promptKey(opts, onSuccess, onCancel)
     local modal = new("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
         Size = UDim2.fromOffset(MW * 0.9, MH * 0.9), BackgroundColor3 = COLOR.BgDeep,
-        BackgroundTransparency = 1, BorderSizePixel = 0, ClipsDescendants = true, ZIndex = 2,
+        BackgroundTransparency = 0, BorderSizePixel = 0, ClipsDescendants = true, ZIndex = 2,
     }, gui)
     corner(modal, 14)
     local modalStroke = stroke(modal, Color3.fromRGB(255,255,255), 1, 1)
 
     local glow = new("Frame", {
         Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(255,255,255),
-        BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 2,
+        BackgroundTransparency = 0, BorderSizePixel = 0, ZIndex = 2,
     }, modal)
     corner(glow, 14)
     new("UIGradient", {
         Color = ColorSequence.new(COLOR.Accent),
         Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.75),
-            NumberSequenceKeypoint.new(0.4, 0.92),
+            NumberSequenceKeypoint.new(0, 0.78),
+            NumberSequenceKeypoint.new(0.4, 0.94),
             NumberSequenceKeypoint.new(1, 1),
         }),
         Rotation = 135,
@@ -448,10 +626,9 @@ function Library:_promptKey(opts, onSuccess, onCancel)
     cancel.MouseLeave:Connect(function() tween(cancel, 0.15, { BackgroundTransparency = 1 }) end)
 
     tween(backdrop, 0.3, { BackgroundTransparency = 0.5 })
-    tween(modal, 0.45, { Size = UDim2.fromOffset(MW, MH), BackgroundTransparency = 0 }, Enum.EasingStyle.Back)
+    tween(modal, 0.45, { Size = UDim2.fromOffset(MW, MH) }, Enum.EasingStyle.Back)
     tween(modalStroke, 0.4, { Transparency = wA(0.1) })
     task.wait(0.1)
-    tween(glow, 0.4, { BackgroundTransparency = 0 })
     tween(title, 0.3, { TextTransparency = 0 })
     task.wait(0.05)
     tween(subtitle, 0.3, { TextTransparency = wA(0.5) })
@@ -559,6 +736,14 @@ end
 
 function Library:CreateWindow(opts)
     opts = opts or {}
+    if opts.LoadingScreen ~= false then
+        Library:_showLoadingScreen({
+            Name = opts.LoadingTitle or opts.Name or "Library",
+            Subtitle = opts.LoadingSubtitle or opts.Subtitle or "",
+            LogoText = opts.LogoText or string.sub(opts.Name or "L", 1, 1):upper(),
+            Duration = opts.LoadingDuration or 1.4,
+        })
+    end
     if opts.KeySystem and opts.KeySettings then
         local done, passed = false, false
         Library:_promptKey(opts.KeySettings,
@@ -827,6 +1012,45 @@ function Library:CreateWindow(opts)
     mobilePrompt.MouseButton1Click:Connect(function() self:SetVisibility(true) end)
     self._mobilePrompt = mobilePrompt
 
+    local isMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
+    local dragBar = new("Frame", {
+        Name = "DragBar", AnchorPoint = Vector2.new(0.5, 1),
+        Size = UDim2.fromOffset(100, 4),
+        BackgroundColor3 = Color3.fromRGB(255,255,255),
+        BackgroundTransparency = 0.55, BorderSizePixel = 0,
+        ZIndex = 100, Visible = isMobile,
+    }, gui)
+    corner(dragBar, 2)
+    local dragHit = new("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(140, 28), BackgroundTransparency = 1,
+        ZIndex = 100,
+    }, dragBar)
+    self._dragBar = dragBar
+    local function updateBarPos()
+        if not window or not window.Parent then return end
+        local p = window.AbsolutePosition
+        local s = window.AbsoluteSize
+        dragBar.Position = UDim2.fromOffset(p.X + s.X / 2, p.Y - 8)
+    end
+    window:GetPropertyChangedSignal("AbsolutePosition"):Connect(updateBarPos)
+    window:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateBarPos)
+    task.defer(updateBarPos)
+    makeDraggable(window, dragHit, function() return self._hidden end)
+    dragHit.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            tween(dragBar, 0.2, { Size = UDim2.fromOffset(120, 5), BackgroundTransparency = 0.2 })
+            local ended
+            ended = input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    tween(dragBar, 0.25, { Size = UDim2.fromOffset(100, 4), BackgroundTransparency = 0.55 })
+                    ended:Disconnect()
+                end
+            end)
+        end
+    end)
+
     table.insert(Library._windows, self)
     self:_createSettingsTab()
 
@@ -867,6 +1091,7 @@ function Window:Hide()
     task.delay(0.36, function()
         if self._hidden and w then w.Visible = false end
     end)
+    if self._dragBar then self._dragBar.Visible = false end
     if self._mobilePrompt then self._mobilePrompt.Visible = true end
 end
 
@@ -881,6 +1106,10 @@ function Window:Unhide()
     w.Visible = true
     w.Size = UDim2.fromOffset(self._normalSize.X.Offset * 0.88, self._normalSize.Y.Offset * 0.88)
     tween(w, 0.4, { Size = self._normalSize }, Enum.EasingStyle.Quint)
+    if self._dragBar then
+        local isMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
+        self._dragBar.Visible = isMobile
+    end
     if self._mobilePrompt then self._mobilePrompt.Visible = false end
 end
 
@@ -1201,6 +1430,178 @@ function Window:SetActiveTab(tab)
     self:_closeSearch()
     self.ActiveTab = tab
     self:_showTab(tab, tab._name)
+end
+
+function Window:CreateHomeTab(opts)
+    opts = opts or {}
+    local tab = self:CreateTab(opts.Name or "Home", opts.Icon or "home")
+
+    if opts.Executor ~= false then
+        tab:CreateSection(opts.ExecutorTitle or "Executor")
+        local name, ver = Library:GetExecutor()
+        local text = "Executor: " .. tostring(name)
+        if ver then text = text .. " (" .. tostring(ver) .. ")" end
+        tab:CreateLabel(text, "code")
+    end
+
+    local linksList = {}
+    if opts.Discord then
+        table.insert(linksList, { Name = "Copy Discord", Icon = "copy", Value = opts.Discord })
+    end
+    if opts.Links then
+        for _, l in ipairs(opts.Links) do table.insert(linksList, l) end
+    end
+    if #linksList > 0 then
+        tab:CreateSection(opts.LinksTitle or "Links")
+        for _, link in ipairs(linksList) do
+            local label = link.Name or "Copy Link"
+            tab:CreateButton({
+                Name = label, Icon = link.Icon or "copy",
+                Callback = function()
+                    if link.Callback then pcall(link.Callback); return end
+                    if Library:CopyToClipboard(link.Value or "") then
+                        Library:Notify({
+                            Title = "Copied", Image = "clipboard-check",
+                            Content = label .. " copied to clipboard.", Duration = 2,
+                        })
+                    else
+                        Library:Notify({
+                            Title = "Failed", Image = "x",
+                            Content = "Your executor does not support clipboard.", Duration = 2,
+                        })
+                    end
+                end,
+            })
+        end
+    end
+
+    if opts.Feedback then
+        local fb = opts.Feedback
+        tab:CreateSection(fb.Title or "Feedback")
+        local current = ""
+        tab:CreateInput({
+            Name = "Feedback", Icon = "message-square",
+            PlaceholderText = fb.Placeholder or "Write your feedback here...",
+            CurrentValue = "",
+            Callback = function(v) current = v end,
+        })
+        tab:CreateButton({
+            Name = fb.ButtonText or "Send Feedback", Icon = "send",
+            Callback = function()
+                if current == "" then
+                    Library:Notify({Title = "Empty", Image = "info", Content = "Type something first.", Duration = 2})
+                    return
+                end
+                if fb.Callback then
+                    pcall(fb.Callback, current)
+                    Library:Notify({Title = "Sent", Image = "check", Content = "Thanks for the feedback.", Duration = 2})
+                    current = ""
+                    return
+                end
+                if not fb.Webhook or fb.Webhook == "" then
+                    Library:Notify({Title = "Not Configured", Image = "info", Content = "No webhook or callback set.", Duration = 2})
+                    return
+                end
+                local payload = "**Feedback from " .. (LocalPlayer.DisplayName or LocalPlayer.Name) .. "** (@" .. LocalPlayer.Name .. ", Id " .. LocalPlayer.UserId .. ")\n"
+                    .. "Executor: " .. tostring(Library:GetExecutor()) .. "\n"
+                    .. "Game: " .. tostring(game.PlaceId) .. "\n\n" .. current
+                local ok = Library:SendWebhook(fb.Webhook, payload, { Username = fb.Username })
+                if ok then
+                    Library:Notify({Title = "Sent", Image = "check", Content = "Thanks for the feedback.", Duration = 2})
+                    current = ""
+                else
+                    Library:Notify({Title = "Failed", Image = "x", Content = "Could not send. Executor must support HTTP.", Duration = 2})
+                end
+            end,
+        })
+    end
+
+    if opts.Universal then
+        local u = type(opts.Universal) == "table" and opts.Universal or {}
+        tab:CreateSection(u.Title or "Universal")
+        local state = { WalkSpeed = 16, JumpPower = 50 }
+        local function hum()
+            local c = LocalPlayer.Character
+            return c and c:FindFirstChildOfClass("Humanoid")
+        end
+        if u.WalkSpeed ~= false then
+            tab:CreateSlider({
+                Name = "Walk Speed", Icon = "footprints",
+                Range = u.WalkSpeedRange or {16, 200}, Increment = 1, Suffix = "studs/s",
+                CurrentValue = (u.WalkSpeedDefault or 16), Flag = "_uni_ws",
+                Callback = function(v) state.WalkSpeed = v; local h = hum(); if h then h.WalkSpeed = v end end,
+            })
+        end
+        if u.JumpPower ~= false then
+            tab:CreateSlider({
+                Name = "Jump Power", Icon = "arrow-up",
+                Range = u.JumpPowerRange or {50, 500}, Increment = 5,
+                CurrentValue = (u.JumpPowerDefault or 50), Flag = "_uni_jp",
+                Callback = function(v) state.JumpPower = v; local h = hum(); if h then h.JumpPower = v end end,
+            })
+        end
+        if u.InfiniteJump ~= false then
+            local conn
+            tab:CreateToggle({
+                Name = "Infinite Jump", Icon = "chevrons-up", CurrentValue = false, Flag = "_uni_ij",
+                Callback = function(v)
+                    if conn then conn:Disconnect(); conn = nil end
+                    if v then
+                        conn = UserInputService.JumpRequest:Connect(function()
+                            local h = hum(); if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
+                        end)
+                    end
+                end,
+            })
+        end
+        if u.NoClip ~= false then
+            local conn
+            tab:CreateToggle({
+                Name = "NoClip", Icon = "ghost", CurrentValue = false, Flag = "_uni_nc",
+                Callback = function(v)
+                    if conn then conn:Disconnect(); conn = nil end
+                    if v then
+                        conn = RunService.Stepped:Connect(function()
+                            local c = LocalPlayer.Character
+                            if c then
+                                for _, p in ipairs(c:GetDescendants()) do
+                                    if p:IsA("BasePart") then p.CanCollide = false end
+                                end
+                            end
+                        end)
+                    end
+                end,
+            })
+        end
+        if u.Server ~= false then
+            tab:CreateButton({ Name = "Rejoin", Icon = "refresh-cw", Callback = function() Library:Rejoin() end })
+            tab:CreateButton({ Name = "Server Hop", Icon = "shuffle", Callback = function() Library:ServerHop() end })
+        end
+        LocalPlayer.CharacterAdded:Connect(function()
+            task.wait(0.1)
+            local h = hum()
+            if h then
+                if state.WalkSpeed then h.WalkSpeed = state.WalkSpeed end
+                if state.JumpPower then h.JumpPower = state.JumpPower end
+            end
+        end)
+    end
+
+    if opts.Credits then
+        local c = opts.Credits
+        tab:CreateSection(c.Title or "Credits")
+        if c.Script then tab:CreateLabel("Script: " .. tostring(c.Script), "user") end
+        if c.UI then tab:CreateLabel("UI: " .. tostring(c.UI), "palette") end
+        if c.Items then
+            for _, line in ipairs(c.Items) do tab:CreateLabel(line.Text, line.Icon) end
+        end
+        if c.Disclaimer then
+            tab:CreateDivider()
+            tab:CreateParagraph({ Content = c.Disclaimer })
+        end
+    end
+
+    return tab
 end
 
 local function nextOrder(tab)
