@@ -1087,24 +1087,26 @@ local function makeDraggable(target, dragHandle, getHidden)
         if getHidden and getHidden() then return end
         local startPos = target.Position
         local startInput = input.Position
+        local dragging = true
         local moveConn
-        moveConn = input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                if moveConn then moveConn:Disconnect() end
-                return
+        moveConn = UserInputService.InputChanged:Connect(function(i)
+            if not dragging then return end
+            if i.UserInputType == Enum.UserInputType.MouseMovement
+                or i.UserInputType == Enum.UserInputType.Touch then
+                local delta = i.Position - startInput
+                target.Position = UDim2.new(
+                    startPos.X.Scale, startPos.X.Offset + delta.X,
+                    startPos.Y.Scale, startPos.Y.Offset + delta.Y
+                )
             end
         end)
-        local rs
-        rs = RunService.RenderStepped:Connect(function()
+        local endConn
+        endConn = input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
-                rs:Disconnect()
-                return
+                dragging = false
+                if moveConn then moveConn:Disconnect() end
+                if endConn then endConn:Disconnect() end
             end
-            local delta = input.Position - startInput
-            target.Position = UDim2.new(
-                startPos.X.Scale, startPos.X.Offset + delta.X,
-                startPos.Y.Scale, startPos.Y.Offset + delta.Y
-            )
         end)
     end)
 end
@@ -1265,7 +1267,7 @@ function Library:CreateWindow(opts)
     topbarBtn("minus",    3, function() self:SetVisibility(false) end)
     topbarBtn("x",        4, function() self:Destroy() end)
 
-    local FOOTER_H = 32
+    local FOOTER_H = 26
     local body = new("Frame", {
         Position = UDim2.fromOffset(0, TBH), Size = UDim2.new(1, 0, 1, -TBH - FOOTER_H),
         BackgroundTransparency = 1, ZIndex = 2,
@@ -1282,12 +1284,43 @@ function Library:CreateWindow(opts)
         BackgroundColor3 = Color3.fromRGB(255,255,255), BackgroundTransparency = wA(0.05),
         BorderSizePixel = 0, ZIndex = 2,
     }, footer)
+
+    local fAvatarBox = new("Frame", {
+        AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0),
+        Size = UDim2.fromOffset(16, 16), BackgroundColor3 = Color3.fromRGB(42,42,46),
+        BorderSizePixel = 0, ZIndex = 3,
+    }, footer)
+    corner(fAvatarBox, 8)
+    local fAvatar = new("ImageLabel", {
+        Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Image = "",
+        ImageTransparency = 1, ZIndex = 3,
+    }, fAvatarBox)
+    corner(fAvatar, 8)
+    local fNameLbl = new("TextLabel", {
+        AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 32, 0.5, 0),
+        Size = UDim2.fromOffset(120, 12), BackgroundTransparency = 1,
+        Text = LocalPlayer.DisplayName or LocalPlayer.Name or "Player",
+        Font = Enum.Font.GothamMedium, TextSize = 10, TextColor3 = Color3.fromRGB(255,255,255),
+        TextTransparency = wA(0.55), TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 3,
+    }, footer)
+    task.spawn(function()
+        local ok, content = pcall(function()
+            return Players:GetUserThumbnailAsync(LocalPlayer.UserId,
+                Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size60x60)
+        end)
+        if ok and content and fAvatar.Parent then
+            fAvatar.Image = content
+            tween(fAvatar, 0.4, { ImageTransparency = 0 })
+        end
+    end)
+
     local footerText = new("TextLabel", {
         AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.new(1, -76, 1, -4), BackgroundTransparency = 1,
+        Size = UDim2.new(1, -260, 1, -4), BackgroundTransparency = 1,
         Text = opts.Name or "Library",
-        Font = Enum.Font.GothamMedium, TextSize = 11, TextColor3 = Color3.fromRGB(255,255,255),
-        TextTransparency = wA(0.45),
+        Font = Enum.Font.GothamMedium, TextSize = 10, TextColor3 = Color3.fromRGB(255,255,255),
+        TextTransparency = wA(0.4),
         TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Center,
         TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 2,
     }, footer)
@@ -1315,8 +1348,8 @@ function Library:CreateWindow(opts)
 
     local resizeHandle = new("TextButton", {
         AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -8, 0.5, 1),
-        Size = UDim2.fromOffset(22, 22),
+        Position = UDim2.new(1, -6, 0.5, 1),
+        Size = UDim2.fromOffset(18, 18),
         BackgroundColor3 = Color3.fromRGB(255,255,255), BackgroundTransparency = 1,
         BorderSizePixel = 0, Text = "", AutoButtonColor = false, ZIndex = 3,
     }, footer)
@@ -1400,20 +1433,57 @@ function Library:CreateWindow(opts)
     }, userInfo)
     local avatarBox = new("Frame", {
         AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0),
-        Size = UDim2.fromOffset(28, 28), BackgroundColor3 = Color3.fromRGB(42,42,46),
-        BorderSizePixel = 0, ZIndex = 3,
+        Size = UDim2.fromOffset(30, 30), BackgroundColor3 = Color3.fromRGB(42,42,46),
+        BorderSizePixel = 0, ZIndex = 3, ClipsDescendants = true,
     }, userInfo)
-    corner(avatarBox, 6)
+    corner(avatarBox, 15)
+    stroke(avatarBox, Color3.fromRGB(255,255,255), wA(0.1), 1)
     local avatar = new("ImageLabel", {
-        Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Image = "", ZIndex = 3,
+        Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Image = "",
+        ImageTransparency = 1, ZIndex = 3,
     }, avatarBox)
-    corner(avatar, 6)
+    corner(avatar, 15)
+    local avatarPulse = new("Frame", {
+        Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(70, 70, 75),
+        BackgroundTransparency = 0, BorderSizePixel = 0, ZIndex = 3,
+    }, avatarBox)
+    corner(avatarPulse, 15)
+    local pulseActive = true
+    task.spawn(function()
+        while pulseActive and avatarPulse.Parent do
+            tween(avatarPulse, 0.7, { BackgroundTransparency = 0.6 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+            task.wait(0.7)
+            if not pulseActive or not avatarPulse.Parent then break end
+            tween(avatarPulse, 0.7, { BackgroundTransparency = 0 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+            task.wait(0.7)
+        end
+    end)
+    local statusDot = new("Frame", {
+        AnchorPoint = Vector2.new(0, 0),
+        Position = UDim2.fromOffset(22, 22),
+        Size = UDim2.fromOffset(10, 10),
+        BackgroundColor3 = Color3.fromRGB(52, 211, 153),
+        BorderSizePixel = 0, ZIndex = 4,
+    }, userInfo)
+    corner(statusDot, 5)
+    new("UIStroke", {
+        Color = COLOR.BgDeep, Transparency = 0, Thickness = 2,
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+    }, statusDot)
     task.spawn(function()
         local ok, content = pcall(function()
             return Players:GetUserThumbnailAsync(LocalPlayer.UserId,
                 Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size60x60)
         end)
-        if ok and content then avatar.Image = content end
+        if ok and content and avatar.Parent then
+            avatar.Image = content
+            tween(avatar, 0.4, { ImageTransparency = 0 }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+            pulseActive = false
+            if avatarPulse and avatarPulse.Parent then
+                tween(avatarPulse, 0.35, { BackgroundTransparency = 1 })
+                task.delay(0.4, function() if avatarPulse then avatarPulse:Destroy() end end)
+            end
+        end
     end)
     new("TextLabel", {
         AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 36, 0.5, -7),
@@ -1547,13 +1617,13 @@ function Window:Hide()
     local scale = LIBRARY_CONFIG.HideAnimScale
     local drop = LIBRARY_CONFIG.HideAnimDrop
     local curSize = w.Size
-    tween(w, dur, {
+    local mainTween = tween(w, dur, {
         Size = UDim2.fromOffset(curSize.X.Offset * scale, curSize.Y.Offset * scale),
         Position = self._restorePos + UDim2.fromOffset(0, drop),
-    }, Enum.EasingStyle.Sine, Enum.EasingDirection.In)
-    if self._glow then tween(self._glow, dur * 0.7, { BackgroundTransparency = 1 }) end
-    if self._shadow then tween(self._shadow, dur * 0.7, { BackgroundTransparency = 1 }) end
-    task.delay(dur + 0.02, function()
+    }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    if self._glow then tween(self._glow, dur, { BackgroundTransparency = 1 }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out) end
+    if self._shadow then tween(self._shadow, dur, { BackgroundTransparency = 1 }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out) end
+    mainTween.Completed:Connect(function()
         if self._hidden and w then w.Visible = false end
     end)
     if self._dragBar then self._dragBar.Visible = false end
@@ -1572,14 +1642,16 @@ function Window:Unhide()
     local restorePos = self._restorePos or w.Position
     local scale = LIBRARY_CONFIG.HideAnimScale
     local drop = LIBRARY_CONFIG.HideAnimDrop
+    if self._glow then self._glow.BackgroundTransparency = 1 end
+    if self._shadow then self._shadow.BackgroundTransparency = 1 end
     w.Visible = true
     w.Size = UDim2.fromOffset(target.X.Offset * scale, target.Y.Offset * scale)
     w.Position = restorePos + UDim2.fromOffset(0, drop)
-    tween(w, 0.55, {
+    tween(w, 0.5, {
         Size = target, Position = restorePos,
-    }, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-    if self._glow then tween(self._glow, 0.4, { BackgroundTransparency = 0 }) end
-    if self._shadow then tween(self._shadow, 0.4, { BackgroundTransparency = 0 }) end
+    }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    if self._glow then tween(self._glow, 0.5, { BackgroundTransparency = 0 }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out) end
+    if self._shadow then tween(self._shadow, 0.5, { BackgroundTransparency = 0 }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out) end
     self._restorePos = nil
     if self._dragBar then
         local isMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
