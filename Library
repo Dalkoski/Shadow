@@ -311,12 +311,6 @@ local THEMES = {
         Danger=Color3.fromRGB(239,68,68), Warning=Color3.fromRGB(245,158,11),
         Accent=Color3.fromRGB(245,158,11), KnobOn=Color3.fromRGB(30,22,14),
     },
-    Light = {
-        BgDeep=Color3.fromRGB(245,245,247), BgLight=Color3.fromRGB(230,230,234),
-        TextPrimary=Color3.fromRGB(20,20,22), Success=Color3.fromRGB(34,197,94),
-        Danger=Color3.fromRGB(220,38,38), Warning=Color3.fromRGB(202,138,4),
-        Accent=Color3.fromRGB(24,24,26), KnobOn=Color3.fromRGB(245,245,247),
-    },
     DarkBlue = {
         BgDeep=Color3.fromRGB(11,16,32), BgLight=Color3.fromRGB(20,28,50),
         TextPrimary=Color3.fromRGB(230,236,250), Success=Color3.fromRGB(96,165,250),
@@ -413,11 +407,28 @@ function Library:AutoExec(url)
     if not exec.queue_on_teleport then return false end
     local payload = string.format(
         "repeat task.wait() until game:IsLoaded() and game.Players.LocalPlayer\n"..
+        "task.wait(0.5)\n"..
         "local ok,err=pcall(function() loadstring(game:HttpGet(%q))() end)\n"..
         "if not ok then warn('[Library] auto-exec failed: '..tostring(err)) end",
         url
     )
     local ok = pcall(exec.queue_on_teleport, payload)
+    if not self._autoExecPersist then
+        self._autoExecPersist = true
+        task.spawn(function()
+            local lp = Players.LocalPlayer
+            if not lp then return end
+            local ok2, ev = pcall(function() return lp.OnTeleport end)
+            if ok2 and ev and typeof(ev) == "RBXScriptSignal" then
+                ev:Connect(function() pcall(exec.queue_on_teleport, payload) end)
+            end
+            pcall(function()
+                Players.PlayerRemoving:Connect(function(p)
+                    if p == lp then pcall(exec.queue_on_teleport, payload) end
+                end)
+            end)
+        end)
+    end
     return ok
 end
 
@@ -734,70 +745,118 @@ function Library:Notify(opts)
     local holder = getNotifGui():FindFirstChild("Holder")
     local accent = opts.Accent or TYPE_COLORS[opts.Type or "default"] or COLOR.Accent
 
+    local wrap = new("Frame", {
+        Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1, BorderSizePixel = 0,
+    }, holder)
+
+    local shadow = new("ImageLabel", {
+        AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.new(1, 30, 1, 30), BackgroundTransparency = 1,
+        Image = "rbxassetid://5028857084",
+        ImageColor3 = Color3.fromRGB(0, 0, 0), ImageTransparency = 0.55,
+        ScaleType = Enum.ScaleType.Slice, SliceCenter = Rect.new(24, 24, 276, 276),
+        ZIndex = 1,
+    }, wrap)
+
     local card = new("Frame", {
         Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundColor3 = COLOR.BgDeep, BorderSizePixel = 0, ClipsDescendants = true,
-    }, holder)
-    corner(card, 12)
-    stroke(card, Color3.fromRGB(255,255,255), wA(0.08), 1)
-    pad(card, 14, 16, 14, 16)
+        BackgroundColor3 = COLOR.BgDeep, BackgroundTransparency = 0.08,
+        BorderSizePixel = 0, ClipsDescendants = true, ZIndex = 2,
+    }, wrap)
+    corner(card, 11)
+    stroke(card, Color3.fromRGB(255,255,255), wA(0.07), 1)
+    pad(card, 13, 14, 13, 14)
 
     local glow = new("Frame", {
         Size = UDim2.fromScale(1, 1), BackgroundColor3 = accent,
-        BackgroundTransparency = 0, BorderSizePixel = 0, ZIndex = 1,
+        BackgroundTransparency = 0, BorderSizePixel = 0, ZIndex = 2,
     }, card)
-    corner(glow, 12)
+    corner(glow, 11)
     new("UIGradient", {
         Color = ColorSequence.new(accent),
         Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.86),
-            NumberSequenceKeypoint.new(0.5, 0.96),
+            NumberSequenceKeypoint.new(0, 0.9),
+            NumberSequenceKeypoint.new(0.55, 0.97),
             NumberSequenceKeypoint.new(1, 1),
         }),
         Rotation = 45,
     }, glow)
 
+    local accentBar = new("Frame", {
+        AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, -8, 0.5, 0),
+        Size = UDim2.new(0, 3, 1, -10), BackgroundColor3 = accent,
+        BackgroundTransparency = 0.1, BorderSizePixel = 0, ZIndex = 3,
+    }, card)
+    corner(accentBar, 2)
+
     local hasIcon = opts.Image and opts.Image ~= ""
-    local contentX = hasIcon and 50 or 4
+    local contentX = hasIcon and 44 or 2
+    local iconBox, iconImg
     if hasIcon then
-        local iconBox = new("Frame", {
-            AnchorPoint = Vector2.new(0, 0.5),
-            Position = UDim2.new(0, 0, 0.5, 0),
-            Size = UDim2.fromOffset(38, 38),
-            BackgroundColor3 = accent, BackgroundTransparency = wA(0.15),
-            BorderSizePixel = 0, ZIndex = 2,
+        iconBox = new("Frame", {
+            AnchorPoint = Vector2.new(0, 0), Position = UDim2.new(0, 0, 0, 1),
+            Size = UDim2.fromOffset(32, 32),
+            BackgroundColor3 = accent, BackgroundTransparency = wA(0.12),
+            BorderSizePixel = 0, ZIndex = 3,
         }, card)
-        corner(iconBox, 9)
-        stroke(iconBox, accent, wA(0.35), 1)
-        applyIcon(iconBox, opts.Image, 22, 0.95)
+        corner(iconBox, 8)
+        stroke(iconBox, accent, wA(0.28), 1)
+        iconImg = applyIcon(iconBox, opts.Image, 18, 0.95)
     end
 
     local titleLbl = new("TextLabel", {
         Position = UDim2.fromOffset(contentX, 0),
-        Size = UDim2.new(1, -contentX, 0, 18),
+        Size = UDim2.new(1, -contentX, 0, 16),
         BackgroundTransparency = 1, Text = opts.Title or "Notification",
-        Font = Enum.Font.GothamBold, TextSize = 15, TextColor3 = COLOR.TextPrimary,
-        TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, ZIndex = 2,
+        Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = COLOR.TextPrimary,
+        TextTransparency = 1, TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Top, ZIndex = 3,
     }, card)
     local descLbl = new("TextLabel", {
-        Position = UDim2.fromOffset(contentX, 22),
+        Position = UDim2.fromOffset(contentX, 18),
         Size = UDim2.new(1, -contentX, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1,
         Text = opts.Content or "",
-        Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = COLOR.TextPrimary,
-        TextTransparency = wA(0.55), TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, ZIndex = 2,
+        Font = Enum.Font.Gotham, TextSize = 12, LineHeight = 1.2,
+        TextColor3 = COLOR.TextPrimary, TextTransparency = 1,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, ZIndex = 3,
     }, card)
 
-    card.Position = UDim2.new(1, 80, 0, 0)
-    tween(card, 0.4, { Position = UDim2.new(0, 0, 0, 0) }, Enum.EasingStyle.Quint)
+    local progressBg = new("Frame", {
+        AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 8),
+        Size = UDim2.new(1, 0, 0, 2), BackgroundColor3 = accent,
+        BackgroundTransparency = wA(0.18), BorderSizePixel = 0, ZIndex = 3,
+    }, card)
+    corner(progressBg, 1)
+    local progressFill = new("Frame", {
+        Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = accent,
+        BorderSizePixel = 0, ZIndex = 4,
+    }, progressBg)
+    corner(progressFill, 1)
+
+    wrap.Position = UDim2.new(1, 80, 0, 0)
+    tween(wrap, 0.45, { Position = UDim2.new(0, 0, 0, 0) }, Enum.EasingStyle.Quint)
+    tween(titleLbl, 0.35, { TextTransparency = 0 })
+    tween(descLbl, 0.45, { TextTransparency = wA(0.72) })
+    if iconImg then
+        iconImg.ImageTransparency = 1
+        tween(iconImg, 0.4, { ImageTransparency = 0.05 })
+    end
+
     local duration = opts.Duration or Library._notifDuration or LIBRARY_CONFIG.NotifDefaultDuration
+    tween(progressFill, duration, { Size = UDim2.new(0, 0, 1, 0) }, Enum.EasingStyle.Linear)
+
     task.delay(duration, function()
-        if not card.Parent then return end
-        tween(titleLbl, 0.2, { TextTransparency = 1 })
-        tween(descLbl, 0.2, { TextTransparency = 1 })
-        local tw = tween(card, 0.35, { Position = UDim2.new(1, 80, 0, 0) }, Enum.EasingStyle.Quint)
-        tw.Completed:Wait(); card:Destroy()
+        if not wrap.Parent then return end
+        tween(titleLbl, 0.25, { TextTransparency = 1 })
+        tween(descLbl, 0.25, { TextTransparency = 1 })
+        if iconImg then tween(iconImg, 0.25, { ImageTransparency = 1 }) end
+        tween(shadow, 0.3, { ImageTransparency = 1 })
+        tween(card, 0.3, { BackgroundTransparency = 1 })
+        local tw = tween(wrap, 0.4, { Position = UDim2.new(1, 80, 0, 0) }, Enum.EasingStyle.Quint)
+        tw.Completed:Wait(); wrap:Destroy()
     end)
 end
 
@@ -1555,39 +1614,44 @@ function Library:CreateWindow(opts)
     mobilePrompt.MouseButton1Click:Connect(function() self:SetVisibility(true) end)
     self._mobilePrompt = mobilePrompt
 
-    local isMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
     local dragBar = new("Frame", {
-        Name = "DragBar", AnchorPoint = Vector2.new(0.5, 1),
-        Size = UDim2.fromOffset(100, 4),
+        Name = "DragBar", AnchorPoint = Vector2.new(0.5, 0),
+        Size = UDim2.fromOffset(110, 5),
         BackgroundColor3 = Color3.fromRGB(255,255,255),
-        BackgroundTransparency = 0.55, BorderSizePixel = 0,
-        ZIndex = 100, Visible = isMobile,
+        BackgroundTransparency = 0.45, BorderSizePixel = 0,
+        ZIndex = 100, Visible = true,
     }, gui)
-    corner(dragBar, 2)
-    local dragHit = new("Frame", {
+    corner(dragBar, 3)
+    local dragHit = new("TextButton", {
         AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(140, 28), BackgroundTransparency = 1,
-        ZIndex = 100,
+        Size = UDim2.fromOffset(160, 32), BackgroundTransparency = 1,
+        Text = "", AutoButtonColor = false, ZIndex = 100,
     }, dragBar)
     self._dragBar = dragBar
     local function updateBarPos()
         if not window or not window.Parent then return end
         local p = window.AbsolutePosition
         local s = window.AbsoluteSize
-        dragBar.Position = UDim2.fromOffset(p.X + s.X / 2, p.Y - 8)
+        dragBar.Position = UDim2.fromOffset(p.X + s.X / 2, p.Y + s.Y + 10)
     end
     window:GetPropertyChangedSignal("AbsolutePosition"):Connect(updateBarPos)
     window:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateBarPos)
     task.defer(updateBarPos)
     makeDraggable(window, dragHit, function() return self._hidden end)
+    dragHit.MouseEnter:Connect(function()
+        tween(dragBar, 0.18, { Size = UDim2.fromOffset(130, 6), BackgroundTransparency = 0.2 })
+    end)
+    dragHit.MouseLeave:Connect(function()
+        tween(dragBar, 0.22, { Size = UDim2.fromOffset(110, 5), BackgroundTransparency = 0.45 })
+    end)
     dragHit.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
             or input.UserInputType == Enum.UserInputType.Touch then
-            tween(dragBar, 0.2, { Size = UDim2.fromOffset(120, 5), BackgroundTransparency = 0.2 })
+            tween(dragBar, 0.15, { Size = UDim2.fromOffset(140, 7), BackgroundTransparency = 0.05 })
             local ended
             ended = input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
-                    tween(dragBar, 0.25, { Size = UDim2.fromOffset(100, 4), BackgroundTransparency = 0.55 })
+                    tween(dragBar, 0.25, { Size = UDim2.fromOffset(110, 5), BackgroundTransparency = 0.45 })
                     ended:Disconnect()
                 end
             end)
@@ -1664,10 +1728,7 @@ function Window:Unhide()
     if self._glow then tween(self._glow, 0.5, { BackgroundTransparency = 0 }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out) end
     if self._shadow then tween(self._shadow, 0.5, { BackgroundTransparency = 0 }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out) end
     self._restorePos = nil
-    if self._dragBar then
-        local isMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
-        self._dragBar.Visible = isMobile
-    end
+    if self._dragBar then self._dragBar.Visible = true end
     if self._mobilePrompt then self._mobilePrompt.Visible = false end
 end
 
@@ -1684,11 +1745,35 @@ function Window:Destroy()
     self._destroyed = true
     if not self.Window or not self.Gui then return end
     local w = self.Window
-    local mainTween = tween(w, 0.3, {
-        Size = UDim2.fromOffset(w.AbsoluteSize.X * 0.85, w.AbsoluteSize.Y * 0.85),
-    }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-    if self._glow then tween(self._glow, 0.3, { BackgroundTransparency = 1 }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out) end
-    if self._shadow then tween(self._shadow, 0.3, { BackgroundTransparency = 1 }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out) end
+    local dur = 0.5
+    local absSize = w.AbsoluteSize
+    local absPos = w.AbsolutePosition
+    if w.AnchorPoint ~= Vector2.new(0.5, 0.5) then
+        w.AnchorPoint = Vector2.new(0.5, 0.5)
+        w.Position = UDim2.fromOffset(absPos.X + absSize.X / 2, absPos.Y + absSize.Y / 2)
+    end
+    if self._dragBar then
+        tween(self._dragBar, 0.2, { BackgroundTransparency = 1, Size = UDim2.fromOffset(60, 3) })
+    end
+    local mainTween = tween(w, dur, {
+        Size = UDim2.fromOffset(absSize.X * 0.7, absSize.Y * 0.7),
+        BackgroundTransparency = 1,
+    }, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+    if self._glow then tween(self._glow, dur * 0.7, { BackgroundTransparency = 1 }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out) end
+    if self._shadow then tween(self._shadow, dur * 0.7, { BackgroundTransparency = 1 }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out) end
+    for _, d in ipairs(w:GetDescendants()) do
+        if d:IsA("TextLabel") or d:IsA("TextButton") or d:IsA("TextBox") then
+            tween(d, dur * 0.55, { TextTransparency = 1 })
+        elseif d:IsA("ImageLabel") or d:IsA("ImageButton") then
+            tween(d, dur * 0.55, { ImageTransparency = 1 })
+        elseif d:IsA("Frame") or d:IsA("ScrollingFrame") then
+            if d.BackgroundTransparency < 1 then
+                tween(d, dur * 0.7, { BackgroundTransparency = 1 })
+            end
+        elseif d:IsA("UIStroke") then
+            tween(d, dur * 0.55, { Transparency = 1 })
+        end
+    end
     mainTween.Completed:Connect(function()
         if self.Gui then self.Gui:Destroy() end
     end)
@@ -2344,21 +2429,23 @@ local function makeIconSquare(parent, size, icon)
     return s, img
 end
 
-local function makeCardLabels(card, title, desc)
+local function makeCardLabels(card, title, desc, rightReserve)
+    rightReserve = rightReserve or 185
     local titleY = desc and -8 or 0
     local titleLbl = new("TextLabel", {
         AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 51, 0.5, titleY),
-        Size = UDim2.new(1, -150, 0, 14), BackgroundTransparency = 1, Text = title,
+        Size = UDim2.new(1, -rightReserve, 0, 14), BackgroundTransparency = 1, Text = title,
         Font = Enum.Font.GothamMedium, TextSize = 12, TextColor3 = COLOR.TextPrimary,
-        TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 3,
+        TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 3,
     }, card)
     local descLbl
     if desc then
         descLbl = new("TextLabel", {
             AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 51, 0.5, 7),
-            Size = UDim2.new(1, -150, 0, 12), BackgroundTransparency = 1, Text = desc,
+            Size = UDim2.new(1, -rightReserve, 0, 12), BackgroundTransparency = 1, Text = desc,
             Font = Enum.Font.Gotham, TextSize = 10, TextColor3 = Color3.fromRGB(255,255,255),
-            TextTransparency = wA(0.4), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 3,
+            TextTransparency = wA(0.5), TextXAlignment = Enum.TextXAlignment.Left,
+            TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 3,
         }, card)
     end
     return titleLbl, descLbl
@@ -2630,7 +2717,8 @@ function Tab:CreateButton(opts)
         BackgroundTransparency = 1,
         Text = opts.Name or "Button", Font = Enum.Font.GothamMedium, TextSize = 12,
         TextColor3 = opts.TextColor or COLOR.TextPrimary, TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Center, ZIndex = 3,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 3,
     }, card)
     if opts.TextGradient then applyTextGradient(label, opts.TextGradient) end
     local hit = new("TextButton", {
@@ -2965,9 +3053,10 @@ function Tab:CreateLabel(text, icon, color, interval)
         Position = UDim2.new(0, icon and 42 or 13, 0.5, 0),
         Size = UDim2.new(1, icon and -55 or -26, 1, 0),
         BackgroundTransparency = 1, Text = tostring(text or ""),
-        Font = Enum.Font.GothamMedium, TextSize = 11,
-        TextColor3 = color or Color3.fromRGB(255,255,255), TextTransparency = wA(0.7),
-        TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 3,
+        Font = Enum.Font.GothamMedium, TextSize = 12,
+        TextColor3 = color or Color3.fromRGB(255,255,255), TextTransparency = wA(0.92),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 3,
     }, card)
     if gradient then applyTextGradient(lbl, gradient) end
     local destroyed = false
@@ -3007,25 +3096,32 @@ function Tab:CreateParagraph(opts)
     }, self.Panel)
     corner(card, 10)
     stroke(card, Color3.fromRGB(255,255,255), wA(0.06), 1)
-    pad(card, 10, 13, 10, 13)
-    local titleLbl = new("TextLabel", {
-        Size = UDim2.new(1, 0, 0, 14), BackgroundTransparency = 1,
-        Text = opts.Title or "", Font = Enum.Font.GothamMedium, TextSize = 12,
-        TextColor3 = COLOR.TextPrimary, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 3,
-    }, card)
+    pad(card, 12, 14, 12, 14)
+    local hasTitle = opts.Title and opts.Title ~= ""
+    local titleLbl
+    if hasTitle then
+        titleLbl = new("TextLabel", {
+            Size = UDim2.new(1, 0, 0, 16), BackgroundTransparency = 1,
+            Text = opts.Title, Font = Enum.Font.GothamBold, TextSize = 13,
+            TextColor3 = COLOR.TextPrimary, TextXAlignment = Enum.TextXAlignment.Left,
+            TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 3,
+        }, card)
+    end
     local contentLbl = new("TextLabel", {
-        Position = UDim2.fromOffset(0, 18), Size = UDim2.new(1, 0, 0, 0),
+        Position = UDim2.fromOffset(0, hasTitle and 22 or 0),
+        Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1,
-        Text = opts.Content or "", Font = Enum.Font.Gotham, TextSize = 11,
-        TextColor3 = Color3.fromRGB(255,255,255), TextTransparency = wA(0.55),
+        Text = opts.Content or "", Font = Enum.Font.Gotham, TextSize = 12,
+        LineHeight = 1.25,
+        TextColor3 = Color3.fromRGB(255,255,255), TextTransparency = wA(0.78),
         TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top,
         TextWrapped = true, ZIndex = 3,
     }, card)
     return {
         Type = "Paragraph",
         Set = function(_, o)
-            titleLbl.Text = o.Title or titleLbl.Text
-            contentLbl.Text = o.Content or contentLbl.Text
+            if titleLbl and o.Title then titleLbl.Text = o.Title end
+            if o.Content then contentLbl.Text = o.Content end
         end,
         Destroy = function() card:Destroy() end,
     }
