@@ -1694,15 +1694,15 @@ function Library:CreateWindow(opts)
     }, dragBar)
     self._dragBar = dragBar
     local function syncBarToWindow()
-        local wp = window.Position
-        local ws = window.Size
-        dragBar.Position = UDim2.new(
-            wp.X.Scale, wp.X.Offset,
-            wp.Y.Scale, wp.Y.Offset + (ws.Y.Offset / 2) + 15
+        local ap = window.AbsolutePosition
+        local as = window.AbsoluteSize
+        dragBar.Position = UDim2.fromOffset(
+            ap.X + as.X / 2,
+            ap.Y + as.Y + 18
         )
     end
-    window:GetPropertyChangedSignal("Position"):Connect(syncBarToWindow)
-    window:GetPropertyChangedSignal("Size"):Connect(syncBarToWindow)
+    window:GetPropertyChangedSignal("AbsolutePosition"):Connect(syncBarToWindow)
+    window:GetPropertyChangedSignal("AbsoluteSize"):Connect(syncBarToWindow)
     syncBarToWindow()
     makeDraggable(window, dragHit, function() return self._hidden end)
     dragHit.MouseEnter:Connect(function()
