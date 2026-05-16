@@ -7,7 +7,7 @@ local LIBRARY_CONFIG = {
             { 0.55, 0.96 },
             { 1,    1    },
         },
-        Rotation = 135,
+        Rotation = 45,
     },
     ShadowBlack = {
         Color = Color3.fromRGB(0, 0, 0),
@@ -17,7 +17,7 @@ local LIBRARY_CONFIG = {
             { 0.8,  0.88 },
             { 1,    0.74 },
         },
-        Rotation = 135,
+        Rotation = 45,
     },
     NotifDefaultDuration = 4,
     HideAnimDuration = 0.4,
@@ -815,7 +815,7 @@ function Library:_showLoadingScreen(opts)
             NumberSequenceKeypoint.new(0.4, 0.95),
             NumberSequenceKeypoint.new(1, 1),
         }),
-        Rotation = 135,
+        Rotation = 45,
     }, backdropGlow)
 
     local container = new("Frame", {
@@ -923,7 +923,7 @@ function Library:_promptKey(opts, onSuccess, onCancel)
             NumberSequenceKeypoint.new(0.4, 0.94),
             NumberSequenceKeypoint.new(1, 1),
         }),
-        Rotation = 135,
+        Rotation = 45,
     }, glow)
 
     local logoBox = new("Frame", {
