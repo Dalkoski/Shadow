@@ -1,6 +1,6 @@
 --[[
 	╔══════════════════════════════════════════════════════════╗
-	║                    VaenHub v3.0                          ║
+	║                    VaenHub v3.1                          ║
 	║       Final polish + spec fixes — by Dalkoski            ║
 	╚══════════════════════════════════════════════════════════╝
 ]]
@@ -48,7 +48,7 @@ local RADIUS = 8
 --==============================================================
 -- ROOT + FORWARD DECLS
 --==============================================================
-local VaenHub = { Version = "3.0.0", Flags = {}, Windows = {} }
+local VaenHub = { Version = "3.1.0", Flags = {}, Windows = {} }
 local Window = {}
 local Tab = {}
 local Elem = {}
@@ -157,7 +157,7 @@ function VaenHub:CreateWindow(cfg)
 		_protect = cfg.Protect or {},
 		_configSave = cfg.Config or {},
 		_name = cfg.Name or "VaenHub",
-		_version = cfg.Version or "v3.0",
+		_version = cfg.Version or "v3.1",
 		_currentTab = nil,
 		_tabOrder = 0,
 	}, {__index = Window})
@@ -257,30 +257,55 @@ function Window:Destroy()
 end
 
 function Window:_SelectTab(tab)
+	local isInitial = (self._currentTab == nil)
 	for _, t in ipairs(self._tabs) do
 		local sel = (t == tab)
 		t._page.Visible = sel
 		if sel then
-			-- ACTIVE — set instantly, no tween
 			t._button.BackgroundColor3 = Color3.fromRGB(38, 32, 64)
-			t._button.BackgroundTransparency = 0
-			t._buttonLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-			if t._buttonIcon then
-				if t._buttonIcon:IsA("ImageLabel") then
-					t._buttonIcon.ImageColor3 = Color3.fromRGB(255, 255, 255)
-				else
-					t._buttonIcon.TextColor3 = Color3.fromRGB(255, 255, 255)
+			if isInitial then
+				-- First paint: instant, no race
+				t._button.BackgroundTransparency = 0
+				t._buttonLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+				if t._buttonIcon then
+					if t._buttonIcon:IsA("ImageLabel") then
+						t._buttonIcon.ImageColor3 = Color3.fromRGB(255, 255, 255)
+					else
+						t._buttonIcon.TextColor3 = Color3.fromRGB(255, 255, 255)
+					end
+				end
+			else
+				-- Subsequent switches: smooth tween
+				tween(t._button, 0.15, {BackgroundTransparency = 0}, Enum.EasingStyle.Quad)
+				tween(t._buttonLabel, 0.15, {TextColor3 = Color3.fromRGB(255, 255, 255)}, Enum.EasingStyle.Quad)
+				if t._buttonIcon then
+					if t._buttonIcon:IsA("ImageLabel") then
+						tween(t._buttonIcon, 0.15, {ImageColor3 = Color3.fromRGB(255, 255, 255)}, Enum.EasingStyle.Quad)
+					else
+						tween(t._buttonIcon, 0.15, {TextColor3 = Color3.fromRGB(255, 255, 255)}, Enum.EasingStyle.Quad)
+					end
 				end
 			end
 		else
-			-- INACTIVE
-			t._button.BackgroundTransparency = 1
-			t._buttonLabel.TextColor3 = Color3.fromRGB(140, 140, 155)
-			if t._buttonIcon then
-				if t._buttonIcon:IsA("ImageLabel") then
-					t._buttonIcon.ImageColor3 = Color3.fromRGB(140, 140, 155)
-				else
-					t._buttonIcon.TextColor3 = Color3.fromRGB(140, 140, 155)
+			if isInitial then
+				t._button.BackgroundTransparency = 1
+				t._buttonLabel.TextColor3 = Color3.fromRGB(140, 140, 155)
+				if t._buttonIcon then
+					if t._buttonIcon:IsA("ImageLabel") then
+						t._buttonIcon.ImageColor3 = Color3.fromRGB(140, 140, 155)
+					else
+						t._buttonIcon.TextColor3 = Color3.fromRGB(140, 140, 155)
+					end
+				end
+			else
+				tween(t._button, 0.15, {BackgroundTransparency = 1}, Enum.EasingStyle.Quad)
+				tween(t._buttonLabel, 0.15, {TextColor3 = Color3.fromRGB(140, 140, 155)}, Enum.EasingStyle.Quad)
+				if t._buttonIcon then
+					if t._buttonIcon:IsA("ImageLabel") then
+						tween(t._buttonIcon, 0.15, {ImageColor3 = Color3.fromRGB(140, 140, 155)}, Enum.EasingStyle.Quad)
+					else
+						tween(t._buttonIcon, 0.15, {TextColor3 = Color3.fromRGB(140, 140, 155)}, Enum.EasingStyle.Quad)
+					end
 				end
 			end
 		end
@@ -647,7 +672,7 @@ function VaenHub:_BuildWindow(win)
 	}, gui)
 	corner(main, 12)
 	stroke(main, Color3.fromRGB(255,255,255), 0.9)
-	gradient(main, Color3.fromRGB(16, 14, 26), Color3.fromRGB(24, 18, 38), 90)
+	gradient(main, Color3.fromRGB(16, 14, 26), Color3.fromRGB(10, 8, 15), 90)
 	win._main = main
 
 	-- VaenHub V watermark (subtle background mark)
@@ -740,28 +765,36 @@ function VaenHub:_BuildWindow(win)
 		badge.Visible = true
 	end)
 
-	-- Topbar buttons — ImageButton with LUCIDE assets
+	-- Topbar buttons — ImageButton with LUCIDE assets, 28px hit boxes, 8px spacing
 	local function topImgBtn(name, assetId, xOff)
 		local b = new("ImageButton", {
 			Name = name,
-			Size = UDim2.fromOffset(20, 20),
+			Size = UDim2.fromOffset(28, 28),
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, xOff, 0.5, 0),
 			BackgroundTransparency = 1,
 			Image = assetId,
 			ImageColor3 = THEME.TextDim,
+			ScaleType = Enum.ScaleType.Fit,
 			AutoButtonColor = false,
 		}, topbar)
-		b.MouseEnter:Connect(function() tween(b, 0.15, {ImageColor3 = THEME.Text}) end)
-		b.MouseLeave:Connect(function() tween(b, 0.15, {ImageColor3 = THEME.TextDim}) end)
+		-- Inset the visual icon inside the button hitbox
+		new("UIPadding", {
+			PaddingTop = UDim.new(0, 5),
+			PaddingBottom = UDim.new(0, 5),
+			PaddingLeft = UDim.new(0, 5),
+			PaddingRight = UDim.new(0, 5),
+		}, b)
+		b.MouseEnter:Connect(function() tween(b, 0.15, {ImageColor3 = THEME.Text}, Enum.EasingStyle.Quad) end)
+		b.MouseLeave:Connect(function() tween(b, 0.15, {ImageColor3 = THEME.TextDim}, Enum.EasingStyle.Quad) end)
 		return b
 	end
 
-	-- Right-to-left: Close, Minimize, Settings, Search
-	local closeBtn  = topImgBtn("Close",    LUCIDE.x,      -14)
-	local miniBtn   = topImgBtn("Mini",     LUCIDE.minus,  -44)
-	local cogBtn    = topImgBtn("Settings", LUCIDE.cog,    -74)
-	local searchBtn = topImgBtn("Search",   LUCIDE.search, -104)
+	-- Right-to-left, 36px spacing between buttons
+	local closeBtn  = topImgBtn("Close",    LUCIDE.x,      -12)
+	local miniBtn   = topImgBtn("Mini",     LUCIDE.minus,  -48)
+	local cogBtn    = topImgBtn("Settings", LUCIDE.cog,    -84)
+	local searchBtn = topImgBtn("Search",   LUCIDE.search, -120)
 
 	closeBtn.MouseButton1Click:Connect(function() win:Destroy() end)
 	miniBtn.MouseButton1Click:Connect(function() win:Minimise() end)
@@ -1129,11 +1162,12 @@ VaenHub._Builders.Toggle = function(self, elem)
 			glow.Transparency = v and 0.5 or 1
 			trackGlow.ImageTransparency = v and 0.6 or 1
 		else
-			tween(thumb, 0.22, {Position = pos, AnchorPoint = anc})
-			tween(track, 0.22, {BackgroundColor3 = v and THEME.AccentStart or THEME.ElementHover})
+			-- 0.15s Quad easing per spec
+			tween(thumb, 0.15, {Position = pos, AnchorPoint = anc}, Enum.EasingStyle.Quad)
+			tween(track, 0.15, {BackgroundColor3 = v and THEME.AccentStart or THEME.ElementHover}, Enum.EasingStyle.Quad)
 			trackGrad.Enabled = v
-			tween(glow, 0.22, {Transparency = v and 0.5 or 1})
-			tween(trackGlow, 0.22, {ImageTransparency = v and 0.6 or 1})
+			tween(glow, 0.15, {Transparency = v and 0.5 or 1}, Enum.EasingStyle.Quad)
+			tween(trackGlow, 0.15, {ImageTransparency = v and 0.6 or 1}, Enum.EasingStyle.Quad)
 		end
 	end
 
@@ -1288,12 +1322,19 @@ VaenHub._Builders.Button = function(self, elem)
 	}, f)
 
 	local btn = new("TextButton", {Size=UDim2.fromScale(1,1), BackgroundTransparency=1, Text="", AutoButtonColor=false}, f)
+	btn.MouseButton1Down:Connect(function()
+		if not elem._enabled then return end
+		tween(f, 0.1, {BackgroundColor3 = THEME.ElementHover}, Enum.EasingStyle.Quad)
+	end)
+	btn.MouseButton1Up:Connect(function()
+		tween(f, 0.15, {BackgroundColor3 = THEME.ElementBg}, Enum.EasingStyle.Quad)
+	end)
+	btn.MouseLeave:Connect(function()
+		tween(f, 0.15, {BackgroundColor3 = THEME.ElementBg}, Enum.EasingStyle.Quad)
+	end)
 	btn.MouseButton1Click:Connect(function()
 		if not elem._enabled then return end
 		if elem._callback then task.spawn(pcall, elem._callback) end
-		tween(f, 0.1, {BackgroundColor3 = THEME.AccentStart})
-		task.wait(0.12)
-		tween(f, 0.2, {BackgroundColor3 = THEME.ElementBg})
 	end)
 	elem._frame = f
 end
