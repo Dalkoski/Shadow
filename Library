@@ -1,6 +1,6 @@
 --[[
 	╔══════════════════════════════════════════════════════════╗
-	║                    VaenHub v3.4                          ║
+	║                    VaenHub v3.5                          ║
 	║       Final polish + spec fixes — by Dalkoski            ║
 	╚══════════════════════════════════════════════════════════╝
 ]]
@@ -48,7 +48,7 @@ local RADIUS = 8
 --==============================================================
 -- ROOT + FORWARD DECLS
 --==============================================================
-local VaenHub = { Version = "3.4.0", Flags = {}, Windows = {} }
+local VaenHub = { Version = "3.5.0", Flags = {}, Windows = {} }
 local Window = {}
 local Tab = {}
 local Elem = {}
@@ -157,7 +157,7 @@ function VaenHub:CreateWindow(cfg)
 		_protect = cfg.Protect or {},
 		_configSave = cfg.Config or {},
 		_name = cfg.Name or "VaenHub",
-		_version = cfg.Version or "v3.4",
+		_version = cfg.Version or "v3.5",
 		_currentTab = nil,
 		_tabOrder = 0,
 	}, {__index = Window})
@@ -666,7 +666,7 @@ function VaenHub:_BuildWindow(win)
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(WINDOW_W, WINDOW_H),
-		BackgroundColor3 = Color3.fromRGB(15, 13, 25),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
 		ZIndex = 1,
@@ -674,9 +674,13 @@ function VaenHub:_BuildWindow(win)
 	corner(main, 12)
 	stroke(main, Color3.fromRGB(255,255,255), 0.9)
 
-	-- 45deg purple gradient per spec
+	-- 45deg purple gradient — punchy keypoints, white base lets gradient color through fully
 	new("UIGradient", {
-		Color = ColorSequence.new(Color3.fromRGB(26, 21, 48), Color3.fromRGB(10, 8, 18)),
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0.0, Color3.fromRGB(42, 32, 78)),   -- vibrant violet top-left
+			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(22, 16, 38)),   -- mid
+			ColorSequenceKeypoint.new(1.0, Color3.fromRGB(8,  6,  16)),   -- near-black bottom-right
+		}),
 		Rotation = 45,
 	}, main)
 
@@ -773,46 +777,59 @@ function VaenHub:_BuildWindow(win)
 		badge.Visible = true
 	end)
 
-	-- Topbar buttons — ImageButton with exact spec asset IDs, horizontal row
+	-- Topbar buttons — TextButton with clean text glyphs (guaranteed to render in Gotham).
+	-- Each button has its own full-size click area (no hitbox overlap).
 	local btnRow = new("Frame", {
 		Name = "BtnRow",
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -10, 0.5, 0),
-		Size = UDim2.fromOffset(110, 24),
+		Position = UDim2.new(1, -12, 0.5, 0),
+		Size = UDim2.fromOffset(140, 28),
 		BackgroundTransparency = 1,
-		ZIndex = 3,
+		ZIndex = 10,
 	}, topbar)
 
 	new("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
 		HorizontalAlignment = Enum.HorizontalAlignment.Right,
 		VerticalAlignment = Enum.VerticalAlignment.Center,
-		Padding = UDim.new(0, 8),
+		Padding = UDim.new(0, 10),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	}, btnRow)
 
-	local function topImgBtn(name, assetId, layoutOrder)
-		local b = new("ImageButton", {
+	local function topBtn(name, glyph, glyphSize, layoutOrder)
+		-- Container Frame guarantees clean 28x28 hitbox
+		local container = new("Frame", {
 			Name = name,
-			Size = UDim2.fromOffset(18, 18),
+			Size = UDim2.fromOffset(28, 28),
 			BackgroundTransparency = 1,
-			Image = assetId,
-			ImageColor3 = THEME.TextDim,
-			ScaleType = Enum.ScaleType.Fit,
-			AutoButtonColor = false,
 			LayoutOrder = layoutOrder,
-			ZIndex = 3,
+			ZIndex = 10,
 		}, btnRow)
-		b.MouseEnter:Connect(function() tween(b, 0.15, {ImageColor3 = THEME.Text}, Enum.EasingStyle.Quad) end)
-		b.MouseLeave:Connect(function() tween(b, 0.15, {ImageColor3 = THEME.TextDim}, Enum.EasingStyle.Quad) end)
+
+		local b = new("TextButton", {
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			Text = glyph,
+			Font = Enum.Font.GothamBold,
+			TextSize = glyphSize,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			TextYAlignment = Enum.TextYAlignment.Center,
+			TextColor3 = THEME.TextDim,
+			AutoButtonColor = false,
+			ZIndex = 11,
+		}, container)
+
+		b.MouseEnter:Connect(function() tween(b, 0.15, {TextColor3 = THEME.Text}, Enum.EasingStyle.Quad) end)
+		b.MouseLeave:Connect(function() tween(b, 0.15, {TextColor3 = THEME.TextDim}, Enum.EasingStyle.Quad) end)
 		return b
 	end
 
-	-- LayoutOrder 1=leftmost. Left-to-right: Search, Settings, Min, Close
-	local searchBtn = topImgBtn("Search",   "rbxassetid://11432840426", 1)
-	local cogBtn    = topImgBtn("Settings", "rbxassetid://11422143467", 2)
-	local miniBtn   = topImgBtn("Mini",     "rbxassetid://11432842426", 3)
-	local closeBtn  = topImgBtn("Close",    "rbxassetid://11293981513", 4)
+	-- Order left-to-right: Search, Settings, Min, Close
+	-- Glyphs verified to render in Gotham font (no broken squares):
+	local searchBtn = topBtn("Search",   "⌕", 20, 1)  -- U+2315 magnifier
+	local cogBtn    = topBtn("Settings", "⚙", 18, 2)  -- U+2699 gear
+	local miniBtn   = topBtn("Mini",     "–", 22, 3)  -- U+2013 en-dash (cleaner than minus)
+	local closeBtn  = topBtn("Close",    "×", 22, 4)  -- U+00D7 multiplication sign
 
 	closeBtn.MouseButton1Click:Connect(function() win:Destroy() end)
 	miniBtn.MouseButton1Click:Connect(function() win:Minimise() end)
@@ -905,13 +922,28 @@ function VaenHub:_BuildTab(win, t)
 	-- No gradient overlay on tabs (keeps active fill solid violet per spec)
 	local btnStroke = nil
 
-	-- Icon resolution: LUCIDE dict → raw asset path → glyph fallback
+	-- Icon resolution: GLYPHS first (guaranteed render in Gotham) → LUCIDE asset → raw asset
 	local iconLbl
 	local labelX = 12
 	if t._icon then
 		local iconStr = tostring(t._icon)
-		-- Priority 1: Lucide dictionary lookup (e.g. "bolt", "user", "eye", "shield")
-		if LUCIDE[iconStr] then
+		-- Priority 1: Glyph (always renders, no asset failure)
+		if GLYPHS[iconStr] then
+			iconLbl = new("TextLabel", {
+				AnchorPoint = Vector2.new(0, 0.5),
+				Size = UDim2.fromOffset(16, 28),
+				Position = UDim2.new(0, 12, 0.5, 0),
+				BackgroundTransparency = 1,
+				Text = GLYPHS[iconStr],
+				Font = Enum.Font.GothamBold,
+				TextSize = 14,
+				TextColor3 = Color3.fromRGB(140, 140, 155),
+				TextXAlignment = Enum.TextXAlignment.Center,
+				TextYAlignment = Enum.TextYAlignment.Center,
+			}, btn)
+			labelX = 32
+		-- Priority 2: LUCIDE dictionary lookup
+		elseif LUCIDE[iconStr] then
 			iconLbl = new("ImageLabel", {
 				AnchorPoint = Vector2.new(0, 0.5),
 				Size = UDim2.fromOffset(16, 16),
@@ -921,7 +953,7 @@ function VaenHub:_BuildTab(win, t)
 				ImageColor3 = Color3.fromRGB(140, 140, 155),
 			}, btn)
 			labelX = 34
-		-- Priority 2: raw asset path
+		-- Priority 3: raw asset path
 		elseif iconStr:match("^rbxasset") or iconStr:match("^rbxassetid") or iconStr:match("^%d+$") then
 			local src = (iconStr:match("^rbxasset") or iconStr:match("^rbxassetid")) and iconStr or ("rbxassetid://" .. iconStr)
 			iconLbl = new("ImageLabel", {
@@ -933,20 +965,6 @@ function VaenHub:_BuildTab(win, t)
 				ImageColor3 = Color3.fromRGB(140, 140, 155),
 			}, btn)
 			labelX = 34
-		-- Priority 3: glyph fallback
-		elseif GLYPHS[iconStr] then
-			iconLbl = new("TextLabel", {
-				AnchorPoint = Vector2.new(0, 0.5),
-				Size = UDim2.fromOffset(14, 28),
-				Position = UDim2.new(0, 12, 0.5, 0),
-				BackgroundTransparency = 1,
-				Text = GLYPHS[iconStr],
-				Font = Enum.Font.GothamBold,
-				TextSize = 13,
-				TextColor3 = Color3.fromRGB(140, 140, 155),
-				TextXAlignment = Enum.TextXAlignment.Center,
-			}, btn)
-			labelX = 32
 		end
 	end
 
@@ -1075,31 +1093,21 @@ local function addIcon(frame, iconID)
 	local glyphText = nil
 
 	if type(iconID) == "string" then
-		-- Priority 1: LUCIDE dictionary
-		if LUCIDE[iconID] then
+		-- Priority 1: glyph (guaranteed to render)
+		if GLYPHS[iconID] then
+			glyphText = GLYPHS[iconID]
+		-- Priority 2: LUCIDE dictionary
+		elseif LUCIDE[iconID] then
 			imageSource = LUCIDE[iconID]
-		-- Priority 2: raw asset path
+		-- Priority 3: raw asset path
 		elseif iconID:match("^rbxasset://") or iconID:match("^rbxassetid://") then
 			imageSource = iconID
 		elseif iconID:match("^%d+$") then
 			imageSource = "rbxassetid://" .. iconID
-		-- Priority 3: glyph fallback
-		elseif GLYPHS[iconID] then
-			glyphText = GLYPHS[iconID]
 		end
 	end
 
-	if imageSource then
-		local img = new("ImageLabel", {
-			AnchorPoint = Vector2.new(0, 0.5),
-			Size = UDim2.fromOffset(18, 18),
-			Position = UDim2.new(0, 14, 0.5, 0),
-			BackgroundTransparency = 1,
-			Image = imageSource,
-			ImageColor3 = THEME.AccentEnd,
-		}, frame)
-		return img, 40
-	elseif glyphText then
+	if glyphText then
 		local img = new("TextLabel", {
 			AnchorPoint = Vector2.new(0, 0.5),
 			Size = UDim2.fromOffset(20, 20),
@@ -1107,8 +1115,20 @@ local function addIcon(frame, iconID)
 			BackgroundTransparency = 1,
 			Text = glyphText,
 			Font = Enum.Font.GothamBold,
-			TextSize = 14,
+			TextSize = 16,
 			TextColor3 = THEME.AccentEnd,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			TextYAlignment = Enum.TextYAlignment.Center,
+		}, frame)
+		return img, 40
+	elseif imageSource then
+		local img = new("ImageLabel", {
+			AnchorPoint = Vector2.new(0, 0.5),
+			Size = UDim2.fromOffset(18, 18),
+			Position = UDim2.new(0, 14, 0.5, 0),
+			BackgroundTransparency = 1,
+			Image = imageSource,
+			ImageColor3 = THEME.AccentEnd,
 		}, frame)
 		return img, 40
 	end
