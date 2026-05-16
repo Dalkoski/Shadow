@@ -745,68 +745,32 @@ function Library:Notify(opts)
     local holder = getNotifGui():FindFirstChild("Holder")
     local accent = opts.Accent or TYPE_COLORS[opts.Type or "default"] or COLOR.Accent
 
-    local wrap = new("Frame", {
-        Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundTransparency = 1, BorderSizePixel = 0,
-    }, holder)
-
-    local shadow = new("ImageLabel", {
-        AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.new(1, 30, 1, 30), BackgroundTransparency = 1,
-        Image = "rbxassetid://5028857084",
-        ImageColor3 = Color3.fromRGB(0, 0, 0), ImageTransparency = 0.55,
-        ScaleType = Enum.ScaleType.Slice, SliceCenter = Rect.new(24, 24, 276, 276),
-        ZIndex = 1,
-    }, wrap)
-
     local card = new("Frame", {
         Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundColor3 = COLOR.BgDeep, BackgroundTransparency = 0.08,
+        BackgroundColor3 = COLOR.BgDeep, BackgroundTransparency = 0.05,
         BorderSizePixel = 0, ClipsDescendants = true, ZIndex = 2,
-    }, wrap)
-    corner(card, 11)
-    stroke(card, Color3.fromRGB(255,255,255), wA(0.07), 1)
-    pad(card, 13, 14, 13, 14)
-
-    local glow = new("Frame", {
-        Size = UDim2.fromScale(1, 1), BackgroundColor3 = accent,
-        BackgroundTransparency = 0, BorderSizePixel = 0, ZIndex = 2,
-    }, card)
-    corner(glow, 11)
-    new("UIGradient", {
-        Color = ColorSequence.new(accent),
-        Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.9),
-            NumberSequenceKeypoint.new(0.55, 0.97),
-            NumberSequenceKeypoint.new(1, 1),
-        }),
-        Rotation = 45,
-    }, glow)
-
-    local accentBar = new("Frame", {
-        AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, -8, 0.5, 0),
-        Size = UDim2.new(0, 3, 1, -10), BackgroundColor3 = accent,
-        BackgroundTransparency = 0.1, BorderSizePixel = 0, ZIndex = 3,
-    }, card)
-    corner(accentBar, 2)
+    }, holder)
+    corner(card, 12)
+    local cardStroke = stroke(card, Color3.fromRGB(255,255,255), wA(0.06), 1)
+    pad(card, 14, 16, 16, 16)
 
     local hasIcon = opts.Image and opts.Image ~= ""
-    local contentX = hasIcon and 44 or 2
+    local contentX = hasIcon and 46 or 0
     local iconBox, iconImg
     if hasIcon then
         iconBox = new("Frame", {
-            AnchorPoint = Vector2.new(0, 0), Position = UDim2.new(0, 0, 0, 1),
-            Size = UDim2.fromOffset(32, 32),
-            BackgroundColor3 = accent, BackgroundTransparency = wA(0.12),
+            AnchorPoint = Vector2.new(0, 0), Position = UDim2.new(0, 0, 0, 2),
+            Size = UDim2.fromOffset(34, 34),
+            BackgroundColor3 = Color3.fromRGB(255,255,255), BackgroundTransparency = wA(0.05),
             BorderSizePixel = 0, ZIndex = 3,
         }, card)
-        corner(iconBox, 8)
-        stroke(iconBox, accent, wA(0.28), 1)
-        iconImg = applyIcon(iconBox, opts.Image, 18, 0.95)
+        corner(iconBox, 9)
+        stroke(iconBox, Color3.fromRGB(255,255,255), wA(0.1), 1)
+        iconImg = applyIcon(iconBox, opts.Image, 18, 0.92)
     end
 
     local titleLbl = new("TextLabel", {
-        Position = UDim2.fromOffset(contentX, 0),
+        Position = UDim2.fromOffset(contentX, 1),
         Size = UDim2.new(1, -contentX, 0, 16),
         BackgroundTransparency = 1, Text = opts.Title or "Notification",
         Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = COLOR.TextPrimary,
@@ -814,49 +778,48 @@ function Library:Notify(opts)
         TextYAlignment = Enum.TextYAlignment.Top, ZIndex = 3,
     }, card)
     local descLbl = new("TextLabel", {
-        Position = UDim2.fromOffset(contentX, 18),
+        Position = UDim2.fromOffset(contentX, 20),
         Size = UDim2.new(1, -contentX, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1,
         Text = opts.Content or "",
-        Font = Enum.Font.Gotham, TextSize = 12, LineHeight = 1.2,
-        TextColor3 = COLOR.TextPrimary, TextTransparency = 1,
+        Font = Enum.Font.Gotham, TextSize = 12, LineHeight = 1.25,
+        TextColor3 = Color3.fromRGB(255,255,255), TextTransparency = 1,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, ZIndex = 3,
     }, card)
 
     local progressBg = new("Frame", {
-        AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 8),
-        Size = UDim2.new(1, 0, 0, 2), BackgroundColor3 = accent,
-        BackgroundTransparency = wA(0.18), BorderSizePixel = 0, ZIndex = 3,
+        AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 12),
+        Size = UDim2.new(1, 0, 0, 2), BackgroundColor3 = Color3.fromRGB(255,255,255),
+        BackgroundTransparency = wA(0.06), BorderSizePixel = 0, ZIndex = 3,
     }, card)
-    corner(progressBg, 1)
     local progressFill = new("Frame", {
         Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = accent,
-        BorderSizePixel = 0, ZIndex = 4,
+        BackgroundTransparency = wA(0.55), BorderSizePixel = 0, ZIndex = 4,
     }, progressBg)
-    corner(progressFill, 1)
 
-    wrap.Position = UDim2.new(1, 80, 0, 0)
-    tween(wrap, 0.45, { Position = UDim2.new(0, 0, 0, 0) }, Enum.EasingStyle.Quint)
+    card.Position = UDim2.new(1, 80, 0, 0)
+    tween(card, 0.45, { Position = UDim2.new(0, 0, 0, 0) }, Enum.EasingStyle.Quint)
     tween(titleLbl, 0.35, { TextTransparency = 0 })
-    tween(descLbl, 0.45, { TextTransparency = wA(0.72) })
+    tween(descLbl, 0.45, { TextTransparency = wA(0.6) })
     if iconImg then
         iconImg.ImageTransparency = 1
-        tween(iconImg, 0.4, { ImageTransparency = 0.05 })
+        tween(iconImg, 0.4, { ImageTransparency = 0.08 })
     end
 
     local duration = opts.Duration or Library._notifDuration or LIBRARY_CONFIG.NotifDefaultDuration
     tween(progressFill, duration, { Size = UDim2.new(0, 0, 1, 0) }, Enum.EasingStyle.Linear)
 
     task.delay(duration, function()
-        if not wrap.Parent then return end
+        if not card.Parent then return end
         tween(titleLbl, 0.25, { TextTransparency = 1 })
         tween(descLbl, 0.25, { TextTransparency = 1 })
         if iconImg then tween(iconImg, 0.25, { ImageTransparency = 1 }) end
-        tween(shadow, 0.3, { ImageTransparency = 1 })
-        tween(card, 0.3, { BackgroundTransparency = 1 })
-        local tw = tween(wrap, 0.4, { Position = UDim2.new(1, 80, 0, 0) }, Enum.EasingStyle.Quint)
-        tw.Completed:Wait(); wrap:Destroy()
+        tween(cardStroke, 0.3, { Transparency = 1 })
+        local tw = tween(card, 0.4, {
+            Position = UDim2.new(1, 80, 0, 0), BackgroundTransparency = 1,
+        }, Enum.EasingStyle.Quint)
+        tw.Completed:Wait(); card:Destroy()
     end)
 end
 
@@ -1274,11 +1237,6 @@ function Library:CreateWindow(opts)
         Name = "Titlebar", Size = UDim2.new(1, 0, 0, TBH),
         BackgroundTransparency = 1, ZIndex = 2,
     }, window)
-    new("Frame", {
-        AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0),
-        Size = UDim2.new(1, 0, 0, 1), BackgroundColor3 = Color3.fromRGB(255,255,255),
-        BackgroundTransparency = wA(0.05), BorderSizePixel = 0, ZIndex = 2,
-    }, titlebar)
     local dragHandle = new("TextButton", {
         Size = UDim2.new(1, -140, 1, 0),
         BackgroundTransparency = 1, Text = "", AutoButtonColor = false, ZIndex = 4,
@@ -1358,20 +1316,25 @@ function Library:CreateWindow(opts)
         Size = UDim2.new(1, 0, 0, FOOTER_H), BackgroundTransparency = 1, ZIndex = 2,
     }, window)
     new("Frame", {
-        Position = UDim2.fromOffset(0, 0), Size = UDim2.new(1, 0, 0, 1),
+        Position = UDim2.fromOffset(SBW + 1, 0), Size = UDim2.new(1, -SBW - 1, 0, 1),
         BackgroundColor3 = Color3.fromRGB(255,255,255), BackgroundTransparency = wA(0.05),
         BorderSizePixel = 0, ZIndex = 2,
     }, footer)
 
+    local footerCenter = new("Frame", {
+        Position = UDim2.fromOffset(SBW + 1, 0),
+        Size = UDim2.new(1, -SBW - 1, 1, 0),
+        BackgroundTransparency = 1, ZIndex = 2,
+    }, footer)
     local footerText = new("TextLabel", {
-        AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -36, 0.5, 0),
-        Size = UDim2.new(1, -SBW - 60, 1, -4), BackgroundTransparency = 1,
+        AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.new(1, -40, 1, -4), BackgroundTransparency = 1,
         Text = opts.Name or "Library",
         Font = Enum.Font.GothamMedium, TextSize = 10, TextColor3 = Color3.fromRGB(255,255,255),
         TextTransparency = wA(0.4),
-        TextXAlignment = Enum.TextXAlignment.Right, TextYAlignment = Enum.TextYAlignment.Center,
+        TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Center,
         TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 2,
-    }, footer)
+    }, footerCenter)
     self._footerText = footerText
     local function setFooterText()
         local left = opts.Name or "Library"
@@ -1455,11 +1418,25 @@ function Library:CreateWindow(opts)
         BackgroundTransparency = 1, ZIndex = 2,
     }, body)
     self.Sidebar = sidebar
+
     new("Frame", {
-        AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0),
-        Size = UDim2.new(0, 1, 1, 0), BackgroundColor3 = Color3.fromRGB(255,255,255),
-        BackgroundTransparency = wA(0.05), BorderSizePixel = 0, ZIndex = 2,
-    }, sidebar)
+        Name = "VerticalSep",
+        AnchorPoint = Vector2.new(0, 0), Position = UDim2.fromOffset(SBW, TBH),
+        Size = UDim2.new(0, 1, 1, -TBH), BackgroundColor3 = Color3.fromRGB(255,255,255),
+        BackgroundTransparency = wA(0.05), BorderSizePixel = 0, ZIndex = 3,
+    }, window)
+    new("Frame", {
+        Name = "TopSep",
+        AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, SBW + 1, 0, TBH),
+        Size = UDim2.new(1, -SBW - 1, 0, 1), BackgroundColor3 = Color3.fromRGB(255,255,255),
+        BackgroundTransparency = wA(0.05), BorderSizePixel = 0, ZIndex = 3,
+    }, window)
+    new("Frame", {
+        Name = "UserSep",
+        AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -56),
+        Size = UDim2.new(0, SBW, 0, 1), BackgroundColor3 = Color3.fromRGB(255,255,255),
+        BackgroundTransparency = wA(0.05), BorderSizePixel = 0, ZIndex = 3,
+    }, window)
     local tabList = new("Frame", {
         Name = "TabList", Position = UDim2.fromOffset(10, 12),
         Size = UDim2.new(1, -20, 1, -64), BackgroundTransparency = 1, ZIndex = 2,
@@ -1499,46 +1476,6 @@ function Library:CreateWindow(opts)
             task.wait(0.7)
         end
     end)
-
-    local statusHalo = new("Frame", {
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromOffset(28, 28),
-        Size = UDim2.fromOffset(20, 20),
-        BackgroundColor3 = Color3.fromRGB(52, 211, 153),
-        BackgroundTransparency = wA(0.35), BorderSizePixel = 0, ZIndex = 7,
-    }, userInfo)
-    corner(statusHalo, 10)
-    new("UIGradient", {
-        Color = ColorSequence.new(Color3.fromRGB(52, 211, 153)),
-        Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.4),
-            NumberSequenceKeypoint.new(1, 1),
-        }),
-        Rotation = 90,
-    }, statusHalo)
-    local statusDot = new("Frame", {
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromOffset(28, 28),
-        Size = UDim2.fromOffset(11, 11),
-        BackgroundColor3 = Color3.fromRGB(52, 211, 153),
-        BorderSizePixel = 0, ZIndex = 8,
-    }, userInfo)
-    corner(statusDot, 6)
-    new("UIGradient", {
-        Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(110, 231, 183)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(34, 197, 94)),
-        }),
-        Rotation = 45,
-    }, statusDot)
-    new("UIStroke", {
-        Color = COLOR.BgDeep, Transparency = 0, Thickness = 2,
-        ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-    }, statusDot)
-    local haloTween = TweenService:Create(statusHalo,
-        TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-        { Size = UDim2.fromOffset(26, 26), BackgroundTransparency = 1 })
-    haloTween:Play()
 
     task.spawn(function()
         local ok, content = pcall(function()
