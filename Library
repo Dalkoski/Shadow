@@ -1,3 +1,36 @@
+local LIBRARY_CONFIG = {
+    GlowWhite = {
+        Color = Color3.fromRGB(255, 255, 255),
+        Stops = {
+            { 0,    0.72 },
+            { 0.2,  0.83 },
+            { 0.45, 0.92 },
+            { 0.7,  0.98 },
+            { 1,    1    },
+        },
+        Rotation = 135,
+    },
+    ShadowBlack = {
+        Color = Color3.fromRGB(0, 0, 0),
+        Stops = {
+            { 0,    1   },
+            { 0.55, 0.95 },
+            { 0.8,  0.82 },
+            { 1,    0.70 },
+        },
+        Rotation = 135,
+    },
+    NotifDefaultDuration = 4,
+    HideAnimDuration = 0.4,
+    HideAnimScale = 0.86,
+    HideAnimDrop = 24,
+    AccentColor = nil,
+    ResizeMinWidth = 480,
+    ResizeMinHeight = 320,
+    ResizeMaxWidth = 1100,
+    ResizeMaxHeight = 800,
+}
+
 local Players          = game:GetService("Players")
 local CoreGui          = game:GetService("CoreGui")
 local TweenService     = game:GetService("TweenService")
@@ -49,6 +82,38 @@ local function tween(obj, dur, props, style, dir)
     local t = TweenService:Create(obj, TweenInfo.new(dur, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out), props)
     t:Play()
     return t
+end
+
+local function makeGradient(parent, cfg)
+    cfg = cfg or LIBRARY_CONFIG.GlowWhite
+    local stops = {}
+    for _, s in ipairs(cfg.Stops) do
+        table.insert(stops, NumberSequenceKeypoint.new(s[1], s[2]))
+    end
+    return new("UIGradient", {
+        Color = ColorSequence.new(cfg.Color or Color3.fromRGB(255,255,255)),
+        Transparency = NumberSequence.new(stops),
+        Rotation = cfg.Rotation or 135,
+    }, parent)
+end
+
+local function addGlow(parent, radius)
+    radius = radius or 14
+    local glow = new("Frame", {
+        Name = "Glow", Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = LIBRARY_CONFIG.GlowWhite.Color,
+        BackgroundTransparency = 0, BorderSizePixel = 0, ZIndex = 1,
+    }, parent)
+    new("UICorner", { CornerRadius = UDim.new(0, radius) }, glow)
+    makeGradient(glow, LIBRARY_CONFIG.GlowWhite)
+    local shadow = new("Frame", {
+        Name = "Shadow", Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = LIBRARY_CONFIG.ShadowBlack.Color,
+        BackgroundTransparency = 0, BorderSizePixel = 0, ZIndex = 1,
+    }, parent)
+    new("UICorner", { CornerRadius = UDim.new(0, radius) }, shadow)
+    makeGradient(shadow, LIBRARY_CONFIG.ShadowBlack)
+    return glow, shadow
 end
 
 local Lucide
@@ -258,12 +323,13 @@ function Library:GetExecutor()
 end
 
 function Library:CopyToClipboard(text)
-    local sc = rawget(_G, "setclipboard")
+    local sc = setclipboard
         or (syn and syn.write_clipboard)
-        or rawget(_G, "toclipboard")
-        or rawget(_G, "set_clipboard")
+        or toclipboard
+        or set_clipboard
         or (Clipboard and Clipboard.set)
-    if not sc then return false end
+        or (getgenv and getgenv().setclipboard)
+    if type(sc) ~= "function" then return false end
     return (pcall(sc, tostring(text)))
 end
 
@@ -337,68 +403,72 @@ local function getNotifGui()
     return notifGui
 end
 
+local TYPE_COLORS = {
+    success = Color3.fromRGB(52, 211, 153),
+    error   = Color3.fromRGB(239, 68, 68),
+    warning = Color3.fromRGB(251, 191, 36),
+    info    = Color3.fromRGB(96, 165, 250),
+}
+
 function Library:Notify(opts)
     opts = opts or {}
+    if Library._notifEnabled == false then return end
     local holder = getNotifGui():FindFirstChild("Holder")
+    local accent = opts.Accent or TYPE_COLORS[opts.Type or "default"] or COLOR.Accent
+
     local card = new("Frame", {
         Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundColor3 = COLOR.BgDeep, BorderSizePixel = 0, ClipsDescendants = true,
     }, holder)
-    corner(card, 12)
+    corner(card, 14)
     stroke(card, Color3.fromRGB(255,255,255), wA(0.1), 1)
-    pad(card, 14, 16, 14, 16)
+    addGlow(card, 14)
+    pad(card, 16, 18, 16, 18)
 
-    local glow = new("Frame", {
-        Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(255,255,255),
-        BackgroundTransparency = 0, BorderSizePixel = 0, ZIndex = 1,
+    local accentBar = new("Frame", {
+        Position = UDim2.fromOffset(0, 6), Size = UDim2.new(0, 3, 1, -12),
+        BackgroundColor3 = accent, BorderSizePixel = 0, ZIndex = 2,
     }, card)
-    corner(glow, 12)
-    new("UIGradient", {
-        Color = ColorSequence.new(opts.Accent or COLOR.Accent),
-        Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.88),
-            NumberSequenceKeypoint.new(0.5, 0.97),
-            NumberSequenceKeypoint.new(1, 1),
-        }),
-        Rotation = 135,
-    }, glow)
+    corner(accentBar, 2)
 
     local hasIcon = opts.Image and opts.Image ~= ""
+    local contentX = hasIcon and 56 or 14
     if hasIcon then
         local iconBox = new("Frame", {
-            Position = UDim2.fromOffset(0, 2), Size = UDim2.fromOffset(34, 34),
-            BackgroundColor3 = Color3.fromRGB(255,255,255), BackgroundTransparency = wA(0.06),
+            Position = UDim2.fromOffset(14, 2), Size = UDim2.fromOffset(38, 38),
+            BackgroundColor3 = Color3.fromRGB(255,255,255), BackgroundTransparency = wA(0.07),
             BorderSizePixel = 0, ZIndex = 2,
         }, card)
-        corner(iconBox, 8)
-        stroke(iconBox, Color3.fromRGB(255,255,255), wA(0.08), 1)
-        applyIcon(iconBox, opts.Image, 20, 0.9)
+        corner(iconBox, 9)
+        stroke(iconBox, Color3.fromRGB(255,255,255), wA(0.1), 1)
+        applyIcon(iconBox, opts.Image, 22, 0.92)
     end
 
     local titleLbl = new("TextLabel", {
-        Position = UDim2.fromOffset(hasIcon and 46 or 0, 0),
-        Size = UDim2.new(1, hasIcon and -46 or 0, 0, 16),
+        Position = UDim2.fromOffset(contentX, 0),
+        Size = UDim2.new(1, -contentX - 8, 0, 18),
         BackgroundTransparency = 1, Text = opts.Title or "Notification",
-        Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = COLOR.TextPrimary,
+        Font = Enum.Font.GothamBold, TextSize = 15, TextColor3 = COLOR.TextPrimary,
         TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, ZIndex = 2,
     }, card)
     local descLbl = new("TextLabel", {
-        Position = UDim2.fromOffset(hasIcon and 46 or 0, 20),
-        Size = UDim2.new(1, hasIcon and -46 or 0, 0, 0),
+        Position = UDim2.fromOffset(contentX, 22),
+        Size = UDim2.new(1, -contentX - 8, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1,
         Text = opts.Content or "",
         Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = Color3.fromRGB(255,255,255),
-        TextTransparency = wA(0.65), TextXAlignment = Enum.TextXAlignment.Left,
+        TextTransparency = wA(0.6), TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, ZIndex = 2,
     }, card)
 
-    card.Position = UDim2.new(1, 60, 0, 0)
-    tween(card, 0.4, { Position = UDim2.new(0, 0, 0, 0) }, Enum.EasingStyle.Quint)
-    task.delay(opts.Duration or 4, function()
+    card.Position = UDim2.new(1, 80, 0, 0)
+    tween(card, 0.45, { Position = UDim2.new(0, 0, 0, 0) }, Enum.EasingStyle.Quint)
+    local duration = opts.Duration or Library._notifDuration or LIBRARY_CONFIG.NotifDefaultDuration
+    task.delay(duration, function()
         if not card.Parent then return end
-        tween(titleLbl, 0.2, { TextTransparency = 1 })
-        tween(descLbl, 0.2, { TextTransparency = 1 })
-        local tw = tween(card, 0.35, { Position = UDim2.new(1, 60, 0, 0) }, Enum.EasingStyle.Quint)
+        tween(titleLbl, 0.25, { TextTransparency = 1 })
+        tween(descLbl, 0.25, { TextTransparency = 1 })
+        local tw = tween(card, 0.4, { Position = UDim2.new(1, 80, 0, 0) }, Enum.EasingStyle.Quint)
         tw.Completed:Wait(); card:Destroy()
     end)
 end
@@ -805,24 +875,10 @@ function Library:CreateWindow(opts)
     corner(window, 14)
     stroke(window, Color3.fromRGB(255,255,255), wA(0.05), 1)
 
-    local glow = new("Frame", {
-        Name = "Glow", Size = UDim2.fromScale(1, 1),
-        BackgroundColor3 = Color3.fromRGB(255,255,255),
-        BackgroundTransparency = 0, BorderSizePixel = 0, ZIndex = 1,
-    }, window)
-    corner(glow, 14)
-    new("UIGradient", {
-        Color = ColorSequence.new(Color3.fromRGB(255,255,255)),
-        Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.78),
-            NumberSequenceKeypoint.new(0.35, 0.92),
-            NumberSequenceKeypoint.new(0.7, 0.99),
-            NumberSequenceKeypoint.new(1, 1),
-        }),
-        Rotation = 135,
-    }, glow)
+    local glow, shadow = addGlow(window, 14)
     self.Window = window
     self._glow = glow
+    self._shadow = shadow
 
     window.Size = UDim2.fromOffset(WW * 0.9, WH * 0.9)
     tween(window, 0.45, { Size = self._normalSize }, Enum.EasingStyle.Back)
@@ -901,11 +957,98 @@ function Library:CreateWindow(opts)
     topbarBtn("minus",    3, function() self:SetVisibility(false) end)
     topbarBtn("x",        4, function() self:Destroy() end)
 
+    local FOOTER_H = 32
     local body = new("Frame", {
-        Position = UDim2.fromOffset(0, TBH), Size = UDim2.new(1, 0, 1, -TBH),
+        Position = UDim2.fromOffset(0, TBH), Size = UDim2.new(1, 0, 1, -TBH - FOOTER_H),
         BackgroundTransparency = 1, ZIndex = 2,
     }, window)
     self.Body = body
+
+    local footer = new("Frame", {
+        Name = "Footer",
+        AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0),
+        Size = UDim2.new(1, 0, 0, FOOTER_H), BackgroundTransparency = 1, ZIndex = 2,
+    }, window)
+    new("Frame", {
+        Position = UDim2.fromOffset(0, 0), Size = UDim2.new(1, 0, 0, 1),
+        BackgroundColor3 = Color3.fromRGB(255,255,255), BackgroundTransparency = wA(0.05),
+        BorderSizePixel = 0, ZIndex = 2,
+    }, footer)
+    local footerText = new("TextLabel", {
+        AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.new(1, -76, 1, -4), BackgroundTransparency = 1,
+        Text = opts.Name or "Library",
+        Font = Enum.Font.GothamMedium, TextSize = 11, TextColor3 = Color3.fromRGB(255,255,255),
+        TextTransparency = wA(0.45),
+        TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Center,
+        TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 2,
+    }, footer)
+    self._footerText = footerText
+    local function setFooterText()
+        local left = opts.Name or "Library"
+        local right = opts.Discord or opts.FooterRight or ""
+        if right ~= "" then
+            footerText.Text = left .. "  |  " .. right
+        else
+            footerText.Text = left
+        end
+    end
+    setFooterText()
+    if not opts.Discord and not opts.FooterRight then
+        task.spawn(function()
+            local ok, info = pcall(function()
+                return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
+            end)
+            if ok and info and info.Name and footerText.Parent then
+                footerText.Text = info.Name
+            end
+        end)
+    end
+
+    local resizeHandle = new("TextButton", {
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, -8, 0.5, 1),
+        Size = UDim2.fromOffset(22, 22),
+        BackgroundColor3 = Color3.fromRGB(255,255,255), BackgroundTransparency = 1,
+        BorderSizePixel = 0, Text = "", AutoButtonColor = false, ZIndex = 3,
+    }, footer)
+    corner(resizeHandle, 5)
+    local resizeIconHolder = new("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(14, 14), BackgroundTransparency = 1, ZIndex = 4,
+    }, resizeHandle)
+    applyIcon(resizeIconHolder, "move-diagonal-2", 14, 0.55)
+    resizeHandle.MouseEnter:Connect(function() tween(resizeHandle, 0.15, { BackgroundTransparency = wA(0.06) }) end)
+    resizeHandle.MouseLeave:Connect(function() tween(resizeHandle, 0.15, { BackgroundTransparency = 1 }) end)
+    self._resizeHandle = resizeHandle
+
+    local resizing = false
+    local startSize, startInput
+    resizeHandle.InputBegan:Connect(function(input)
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1
+            and input.UserInputType ~= Enum.UserInputType.Touch then return end
+        resizing = true
+        startSize = Vector2.new(window.AbsoluteSize.X, window.AbsoluteSize.Y)
+        startInput = input.Position
+    end)
+    resizeHandle.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            resizing = false
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if not resizing then return end
+        if input.UserInputType ~= Enum.UserInputType.MouseMovement
+            and input.UserInputType ~= Enum.UserInputType.Touch then return end
+        local delta = input.Position - startInput
+        local newW = math.clamp(startSize.X + delta.X, LIBRARY_CONFIG.ResizeMinWidth, LIBRARY_CONFIG.ResizeMaxWidth)
+        local newH = math.clamp(startSize.Y + delta.Y, LIBRARY_CONFIG.ResizeMinHeight, LIBRARY_CONFIG.ResizeMaxHeight)
+        local newSize = UDim2.fromOffset(newW, newH)
+        window.Size = newSize
+        self._normalSize = newSize
+        self._currentSize = newSize
+    end)
 
     local SBW = 140
     self.SidebarW = SBW
@@ -1085,10 +1228,16 @@ function Window:Hide()
     if self._hidden then return end
     self._hidden = true
     local w = self.Window
-    tween(w, 0.35, {
-        Size = UDim2.fromOffset(self._normalSize.X.Offset * 0.88, self._normalSize.Y.Offset * 0.88),
+    self._restorePos = self._restorePos or w.Position
+    local dur = LIBRARY_CONFIG.HideAnimDuration
+    local scale = LIBRARY_CONFIG.HideAnimScale
+    local drop = LIBRARY_CONFIG.HideAnimDrop
+    local curSize = w.Size
+    tween(w, dur, {
+        Size = UDim2.fromOffset(curSize.X.Offset * scale, curSize.Y.Offset * scale),
+        Position = self._restorePos + UDim2.fromOffset(0, drop),
     }, Enum.EasingStyle.Quint)
-    task.delay(0.36, function()
+    task.delay(dur + 0.02, function()
         if self._hidden and w then w.Visible = false end
     end)
     if self._dragBar then self._dragBar.Visible = false end
@@ -1103,9 +1252,17 @@ function Window:Unhide()
         if self.Body then self.Body.Visible = true end
     end
     local w = self.Window
+    local target = self._currentSize or self._normalSize
+    local restorePos = self._restorePos or w.Position
+    local scale = LIBRARY_CONFIG.HideAnimScale
+    local drop = LIBRARY_CONFIG.HideAnimDrop
     w.Visible = true
-    w.Size = UDim2.fromOffset(self._normalSize.X.Offset * 0.88, self._normalSize.Y.Offset * 0.88)
-    tween(w, 0.4, { Size = self._normalSize }, Enum.EasingStyle.Quint)
+    w.Size = UDim2.fromOffset(target.X.Offset * scale, target.Y.Offset * scale)
+    w.Position = restorePos + UDim2.fromOffset(0, drop)
+    tween(w, 0.45, {
+        Size = target, Position = restorePos,
+    }, Enum.EasingStyle.Quint)
+    self._restorePos = nil
     if self._dragBar then
         local isMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
         self._dragBar.Visible = isMobile
@@ -1430,6 +1587,162 @@ function Window:SetActiveTab(tab)
     self:_closeSearch()
     self.ActiveTab = tab
     self:_showTab(tab, tab._name)
+end
+
+function Window:CreateUITab(opts)
+    opts = opts or {}
+    local tab = self:CreateTab(opts.Name or "UI Settings", opts.Icon or "settings-2")
+
+    tab:CreateSection(opts.NotificationsTitle or "Notifications")
+    tab:CreateToggle({
+        Name = "Enable Notifications", Icon = "bell",
+        CurrentValue = Library._notifEnabled ~= false,
+        Flag = "_ui_notif_enable",
+        Callback = function(v) Library._notifEnabled = v end,
+    })
+    tab:CreateSlider({
+        Name = "Duration", Icon = "clock",
+        Range = {1, 10}, Increment = 1, Suffix = "s",
+        CurrentValue = Library._notifDuration or LIBRARY_CONFIG.NotifDefaultDuration,
+        Flag = "_ui_notif_duration",
+        Callback = function(v) Library._notifDuration = v end,
+    })
+
+    if self.Config.Enabled then
+        local cfg = self.Config
+        local configsPath = cfg.FolderName .. "/Configs"
+        local autoloadFile = cfg.FolderName .. "/autoload.txt"
+
+        local function listConfigs()
+            local list = {}
+            if exec.isfolder and exec.isfolder(configsPath) and listfiles then
+                local ok, files = pcall(listfiles, configsPath)
+                if ok and files then
+                    for _, f in ipairs(files) do
+                        local n = string.match(f, "([^/\\]+)%.json$")
+                        if n then table.insert(list, n) end
+                    end
+                end
+            end
+            table.sort(list)
+            return list
+        end
+
+        local function readAutoload()
+            local s = safeRead(autoloadFile)
+            if s and s ~= "" then return s end
+            return nil
+        end
+
+        tab:CreateSection(opts.ConfigurationTitle or "Configuration")
+        local typedName = ""
+        local nameInput = tab:CreateInput({
+            Name = "Config name", Icon = "file-text",
+            PlaceholderText = "MyConfig", CurrentValue = "",
+            Callback = function(v) typedName = v end,
+        })
+        local list = listConfigs()
+        local selected = list[1] or "---"
+        local dropdown
+        tab:CreateButton({
+            Name = "Create config", Icon = "plus",
+            Callback = function()
+                if typedName == "" then
+                    Library:Notify({Title = "Empty", Type = "warning", Image = "info", Content = "Enter a name first.", Duration = 2})
+                    return
+                end
+                local orig = cfg.FileName
+                cfg.FileName = typedName
+                self:SaveConfig()
+                cfg.FileName = orig
+                Library:Notify({Title = "Created", Type = "success", Image = "check", Content = typedName, Duration = 2})
+                list = listConfigs()
+                if dropdown then dropdown:Refresh(#list > 0 and list or {"---"}) end
+            end,
+        })
+        tab:CreateDivider()
+        dropdown = tab:CreateDropdown({
+            Name = "Config list", Icon = "list",
+            Options = #list > 0 and list or {"---"},
+            CurrentOption = list[1] or "---",
+            Callback = function(v) selected = v end,
+        })
+        tab:CreateButton({
+            Name = "Load config", Icon = "download",
+            Callback = function()
+                if selected == "---" or selected == "" then return end
+                local orig = cfg.FileName
+                cfg.FileName = selected
+                self:LoadConfig()
+                Library:Notify({Title = "Loaded", Type = "success", Image = "check", Content = selected, Duration = 2})
+            end,
+        })
+        tab:CreateButton({
+            Name = "Overwrite config", Icon = "save",
+            Callback = function()
+                if selected == "---" or selected == "" then return end
+                local orig = cfg.FileName
+                cfg.FileName = selected
+                self:SaveConfig()
+                cfg.FileName = orig
+                Library:Notify({Title = "Overwritten", Type = "success", Image = "check", Content = selected, Duration = 2})
+            end,
+        })
+        tab:CreateButton({
+            Name = "Delete config", Icon = "trash-2",
+            Callback = function()
+                if selected == "---" or selected == "" then return end
+                if exec.delfile then pcall(exec.delfile, configsPath .. "/" .. selected .. ".json") end
+                Library:Notify({Title = "Deleted", Type = "error", Image = "trash-2", Content = selected, Duration = 2})
+                list = listConfigs()
+                if dropdown then dropdown:Refresh(#list > 0 and list or {"---"}) end
+                selected = list[1] or "---"
+            end,
+        })
+        tab:CreateButton({
+            Name = "Refresh list", Icon = "refresh-cw",
+            Callback = function()
+                list = listConfigs()
+                if dropdown then dropdown:Refresh(#list > 0 and list or {"---"}) end
+            end,
+        })
+        local autoloadLabel
+        local function renderAutoload()
+            local cur = readAutoload()
+            local txt = "Current autoload config: " .. (cur or "none")
+            if autoloadLabel then autoloadLabel:Set(txt) end
+        end
+        tab:CreateButton({
+            Name = "Set as autoload", Icon = "pin",
+            Callback = function()
+                if selected == "---" or selected == "" then return end
+                safeWrite(autoloadFile, selected)
+                renderAutoload()
+                Library:Notify({Title = "Autoload set", Type = "success", Image = "check", Content = selected, Duration = 2})
+            end,
+        })
+        tab:CreateButton({
+            Name = "Reset autoload", Icon = "x",
+            Callback = function()
+                if exec.delfile then pcall(exec.delfile, autoloadFile) end
+                renderAutoload()
+                Library:Notify({Title = "Autoload reset", Type = "info", Image = "info", Duration = 2})
+            end,
+        })
+        autoloadLabel = tab:CreateLabel("Current autoload config: " .. (readAutoload() or "none"))
+
+        local cur = readAutoload()
+        if cur and cur ~= "" then
+            task.delay(3.5, function()
+                if self._destroyed then return end
+                local orig = cfg.FileName
+                cfg.FileName = cur
+                self:LoadConfig()
+            end)
+        end
+    end
+
+    return tab
 end
 
 function Window:CreateHomeTab(opts)
@@ -1855,26 +2168,28 @@ function Tab:CreateSlider(opts)
             value = v; setVisual(v); updateFlag(win, flag, v); pcall(cb, v)
         end
     end
+    local dragging = false
     hit.InputBegan:Connect(function(input)
         if input.UserInputType ~= Enum.UserInputType.MouseButton1
             and input.UserInputType ~= Enum.UserInputType.Touch then return end
+        dragging = true
         tween(thumb, 0.15, { Size = UDim2.fromOffset(14, 14) })
         updateFromX(input.Position.X)
-        local moveConn, endConn
-        moveConn = input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                if moveConn then moveConn:Disconnect() end
-                tween(thumb, 0.15, { Size = UDim2.fromOffset(12, 12) })
-                win:SaveConfig()
-            end
-        end)
-        endConn = RunService.RenderStepped:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                endConn:Disconnect()
-                return
-            end
+    end)
+    hit.InputEnded:Connect(function(input)
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1
+            and input.UserInputType ~= Enum.UserInputType.Touch then return end
+        if not dragging then return end
+        dragging = false
+        tween(thumb, 0.15, { Size = UDim2.fromOffset(12, 12) })
+        win:SaveConfig()
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if not dragging then return end
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch then
             updateFromX(input.Position.X)
-        end)
+        end
     end)
     local element = {
         Type = "Slider", Value = value,
