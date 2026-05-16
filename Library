@@ -2,10 +2,9 @@ local LIBRARY_CONFIG = {
     GlowWhite = {
         Color = Color3.fromRGB(255, 255, 255),
         Stops = {
-            { 0,    0.72 },
-            { 0.2,  0.83 },
-            { 0.45, 0.92 },
-            { 0.7,  0.98 },
+            { 0,    0.82 },
+            { 0.25, 0.90 },
+            { 0.55, 0.96 },
             { 1,    1    },
         },
         Rotation = 135,
@@ -13,10 +12,10 @@ local LIBRARY_CONFIG = {
     ShadowBlack = {
         Color = Color3.fromRGB(0, 0, 0),
         Stops = {
-            { 0,    1   },
-            { 0.55, 0.95 },
-            { 0.8,  0.82 },
-            { 1,    0.70 },
+            { 0,    1    },
+            { 0.45, 0.98 },
+            { 0.8,  0.88 },
+            { 1,    0.74 },
         },
         Rotation = 135,
     },
@@ -29,7 +28,17 @@ local LIBRARY_CONFIG = {
     ResizeMinHeight = 320,
     ResizeMaxWidth = 1100,
     ResizeMaxHeight = 800,
+    StealthMode = true,
 }
+
+local function randName(len)
+    len = len or 12
+    local s = ""
+    for _ = 1, len do
+        s = s .. string.char(math.random(97, 122))
+    end
+    return s
+end
 
 local Players          = game:GetService("Players")
 local CoreGui          = game:GetService("CoreGui")
@@ -114,6 +123,109 @@ local function addGlow(parent, radius)
     new("UICorner", { CornerRadius = UDim.new(0, radius) }, shadow)
     makeGradient(shadow, LIBRARY_CONFIG.ShadowBlack)
     return glow, shadow
+end
+
+local function applyTextGradient(label, g)
+    if not g then return nil end
+    local colors
+    if typeof(g) == "Color3" then
+        colors = ColorSequence.new(g)
+    elseif type(g) == "table" then
+        if g.Colors or g.Color then
+            local list = g.Colors or g.Color
+            if typeof(list) == "Color3" then
+                colors = ColorSequence.new(list)
+            elseif type(list) == "table" then
+                local seq = {}
+                for i, c in ipairs(list) do
+                    table.insert(seq, ColorSequenceKeypoint.new((i-1)/math.max(#list-1, 1), c))
+                end
+                colors = ColorSequence.new(seq)
+            end
+        elseif #g >= 1 and typeof(g[1]) == "Color3" then
+            if #g == 1 then
+                colors = ColorSequence.new(g[1])
+            else
+                local seq = {}
+                for i, c in ipairs(g) do
+                    table.insert(seq, ColorSequenceKeypoint.new((i-1)/math.max(#g-1, 1), c))
+                end
+                colors = ColorSequence.new(seq)
+            end
+        end
+    end
+    if not colors then return nil end
+    return new("UIGradient", {
+        Color = colors,
+        Rotation = (type(g) == "table" and g.Rotation) or 0,
+    }, label)
+end
+
+local tooltipGui, tooltipFrame, tooltipText, tooltipRsConn
+local function ensureTooltip()
+    if tooltipGui and tooltipGui.Parent then return end
+    tooltipGui = new("ScreenGui", {
+        Name = LIBRARY_CONFIG.StealthMode and randName(12) or "Library_Tooltip",
+        ResetOnSpawn = false, IgnoreGuiInset = true,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 100000,
+    })
+    safeParent(tooltipGui)
+    tooltipFrame = new("Frame", {
+        AutomaticSize = Enum.AutomaticSize.X,
+        Size = UDim2.fromOffset(0, 26),
+        BackgroundColor3 = Color3.fromRGB(20,20,22),
+        BackgroundTransparency = 0.05, BorderSizePixel = 0,
+        Visible = false, ZIndex = 1,
+    }, tooltipGui)
+    new("UICorner", { CornerRadius = UDim.new(0, 6) }, tooltipFrame)
+    new("UIStroke", {
+        Color = Color3.fromRGB(255,255,255), Transparency = 0.88,
+        Thickness = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+    }, tooltipFrame)
+    new("UIPadding", {
+        PaddingTop = UDim.new(0, 5), PaddingBottom = UDim.new(0, 5),
+        PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10),
+    }, tooltipFrame)
+    tooltipText = new("TextLabel", {
+        AutomaticSize = Enum.AutomaticSize.X,
+        Size = UDim2.fromOffset(0, 16),
+        BackgroundTransparency = 1, Text = "",
+        Font = Enum.Font.GothamMedium, TextSize = 11,
+        TextColor3 = Color3.fromRGB(240,240,240), ZIndex = 2,
+    }, tooltipFrame)
+end
+local function showTooltip(text)
+    ensureTooltip()
+    tooltipText.Text = tostring(text)
+    tooltipFrame.Visible = true
+    if not tooltipRsConn then
+        tooltipRsConn = RunService.RenderStepped:Connect(function()
+            if not tooltipFrame or not tooltipFrame.Visible then
+                if tooltipRsConn then tooltipRsConn:Disconnect(); tooltipRsConn = nil end
+                return
+            end
+            local mp = UserInputService:GetMouseLocation()
+            tooltipFrame.Position = UDim2.fromOffset(mp.X + 14, mp.Y + 12)
+        end)
+    end
+end
+local function hideTooltip()
+    if tooltipFrame then tooltipFrame.Visible = false end
+end
+local function bindTooltip(obj, text)
+    if not text or text == "" then return end
+    obj.MouseEnter:Connect(function() showTooltip(text) end)
+    obj.MouseLeave:Connect(hideTooltip)
+end
+
+local function mergeDefaults(opts, kind)
+    if not opts then opts = {} end
+    local defaults = Library and Library.Defaults and Library.Defaults[kind]
+    if not defaults then return opts end
+    for k, v in pairs(defaults) do
+        if opts[k] == nil then opts[k] = v end
+    end
+    return opts
 end
 
 local Lucide
@@ -216,13 +328,38 @@ local COLOR = {}
 for k, v in pairs(THEMES.Default) do COLOR[k] = v end
 
 local exec = {
-    writefile = writefile or (syn and syn.write_file),
-    readfile  = readfile  or (syn and syn.read_file),
-    isfile    = isfile    or (syn and syn.is_file),
-    makefolder= makefolder or (syn and syn.make_folder),
-    isfolder  = isfolder  or (syn and syn.is_folder),
-    delfile   = delfile   or (syn and syn.delete_file),
-    queue_on_teleport = queue_on_teleport or syn_queue_on_teleport or (syn and syn.queue_on_teleport),
+    writefile = writefile or (syn and syn.write_file) or write_file
+        or (getgenv and getgenv().writefile),
+    readfile  = readfile or (syn and syn.read_file) or read_file
+        or (getgenv and getgenv().readfile),
+    isfile    = isfile or (syn and syn.is_file) or is_file
+        or (getgenv and getgenv().isfile),
+    makefolder= makefolder or (syn and syn.make_folder) or make_folder
+        or (getgenv and getgenv().makefolder),
+    isfolder  = isfolder or (syn and syn.is_folder) or is_folder
+        or (getgenv and getgenv().isfolder),
+    delfile   = delfile or (syn and syn.delete_file) or delete_file
+        or (getgenv and getgenv().delfile),
+    listfiles = listfiles or (syn and syn.list_files) or list_files
+        or (getgenv and getgenv().listfiles),
+    queue_on_teleport = queue_on_teleport or syn_queue_on_teleport
+        or (syn and syn.queue_on_teleport) or queueonteleport
+        or (fluxus and fluxus.queue_on_teleport)
+        or (getgenv and getgenv().queue_on_teleport),
+    request = (syn and syn.request) or (fluxus and fluxus.request)
+        or (http and http.request) or http_request or request
+        or (getgenv and getgenv().request),
+    setclipboard = setclipboard or (syn and syn.write_clipboard)
+        or toclipboard or set_clipboard
+        or (Clipboard and Clipboard.set)
+        or (getgenv and getgenv().setclipboard),
+    getcustomasset = getcustomasset or getsynasset
+        or (syn and syn.crypt and syn.crypt.custom_asset)
+        or (getgenv and getgenv().getcustomasset),
+    gethui = gethui or get_hidden_gui or get_hidden_ui
+        or (getgenv and getgenv().gethui),
+    protect_gui = (syn and syn.protect_gui) or protect_gui
+        or (getgenv and getgenv().protect_gui),
 }
 local function safeMkdir(p) if exec.makefolder and exec.isfolder and not exec.isfolder(p) then pcall(exec.makefolder, p) end end
 local function safeWrite(p, d) if exec.writefile then return pcall(exec.writefile, p, d) end end
@@ -233,12 +370,38 @@ local function safeRead(p)
     if ok then return data end
 end
 
+local function safeParent(gui)
+    if exec.gethui then
+        local ok = pcall(function() gui.Parent = exec.gethui() end)
+        if ok and gui.Parent then return end
+    end
+    if exec.protect_gui then pcall(exec.protect_gui, gui) end
+    local ok = pcall(function() gui.Parent = CoreGui end)
+    if ok and gui.Parent then return end
+    gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
+
 local Library = {
+    Version = "1.0",
+    Config = LIBRARY_CONFIG,
     Flags = {},
     _windows = {},
     _loaderUrl = "https://raw.githubusercontent.com/Dalkoski/Phantom/refs/heads/main/Library",
     Theme = THEMES,
+    Themes = THEMES,
     ToggleKey = Enum.KeyCode.K,
+    _notifEnabled = true,
+    Defaults = {
+        Button     = { Tooltip = nil, CopyValue = nil, TextColor = nil, TextGradient = nil, ConfirmMessage = nil },
+        Toggle     = { Tooltip = nil, TextColor = nil },
+        Slider     = { Tooltip = nil, TextColor = nil },
+        Dropdown   = { Tooltip = nil, TextColor = nil },
+        Input      = { Tooltip = nil, TextColor = nil },
+        Keybind    = { Tooltip = nil, TextColor = nil },
+        Label      = { Tooltip = nil, TextColor = nil, TextGradient = nil },
+        Paragraph  = { Tooltip = nil, TextColor = nil },
+        ColorPicker= { Tooltip = nil },
+    },
 }
 Library.__index = Library
 
@@ -312,25 +475,186 @@ function Library:GetExecutor()
         local ok, n = pcall(getexecutorname)
         if ok and n then return tostring(n) end
     end
+    local function has(name) return (getfenv(0)[name] ~= nil) or (getgenv and getgenv()[name] ~= nil) end
     if syn and syn.protect_gui then return "Synapse X" end
+    if has("KRNL_LOADED") or has("Krnl") then return "Krnl" end
     if fluxus then return "Fluxus" end
-    if KRNL_LOADED or rawget(_G, "Krnl") then return "Krnl" end
-    if WAVE_VERSION or rawget(_G, "Wave") then return "Wave" end
-    if rawget(_G, "PROTOSMASHER_LOADED") then return "ProtoSmasher" end
-    if rawget(_G, "Sentinel") then return "Sentinel" end
-    if pcall(function() return Drawing.new("Square") end) then return "Unknown" end
+    if has("Wave") or has("WAVE_VERSION") then return "Wave" end
+    if has("Hydrogen") then return "Hydrogen" end
+    if has("Codex") then return "Codex" end
+    if has("Sentinel") or has("SENTINEL_LOADED") then return "Sentinel" end
+    if has("Trigon") then return "Trigon" end
+    if has("Delta") then return "Delta" end
+    if has("Solara") then return "Solara" end
+    if has("Xeno") then return "Xeno" end
+    if has("Velocity") then return "Velocity" end
+    if has("Argon") then return "Argon" end
+    if has("Arceus") or has("ArceusX") then return "Arceus X" end
+    if has("JJSploit") then return "JJSploit" end
+    if has("Potassium") or (getgenv and getgenv().PotassiumLoaded) then return "Potassium" end
+    if has("ScriptWare") or has("SCRIPT_WARE") then return "Script-Ware" end
+    if has("Synapse_V3") or has("SYNAPSE_V3") then return "Synapse V3" end
+    if has("Vega") then return "Vega X" end
+    if has("Comet") then return "Comet" end
+    if has("PROTOSMASHER_LOADED") then return "ProtoSmasher" end
+    if pcall(function() return Drawing and Drawing.new("Square") end) then return "Unknown (Drawing API)" end
     return "Unknown"
 end
 
 function Library:CopyToClipboard(text)
-    local sc = setclipboard
-        or (syn and syn.write_clipboard)
-        or toclipboard
-        or set_clipboard
-        or (Clipboard and Clipboard.set)
-        or (getgenv and getgenv().setclipboard)
-    if type(sc) ~= "function" then return false end
-    return (pcall(sc, tostring(text)))
+    if type(exec.setclipboard) ~= "function" then return false end
+    return (pcall(exec.setclipboard, tostring(text)))
+end
+
+function Library:ColorFromHex(hex)
+    hex = tostring(hex):gsub("#", ""):gsub("0x", "")
+    if #hex == 3 then
+        hex = hex:sub(1,1):rep(2) .. hex:sub(2,2):rep(2) .. hex:sub(3,3):rep(2)
+    end
+    return Color3.fromRGB(
+        tonumber(hex:sub(1,2), 16) or 0,
+        tonumber(hex:sub(3,4), 16) or 0,
+        tonumber(hex:sub(5,6), 16) or 0
+    )
+end
+
+function Library:HexFromColor(c)
+    if typeof(c) ~= "Color3" then return "#000000" end
+    return string.format("#%02X%02X%02X",
+        math.floor(c.R*255+0.5),
+        math.floor(c.G*255+0.5),
+        math.floor(c.B*255+0.5))
+end
+
+function Library:GetPlayer(query)
+    if not query or query == "" then return nil end
+    local q = string.lower(tostring(query))
+    if q == "me" or q == "self" then return LocalPlayer end
+    if q == "random" then
+        local list = Players:GetPlayers()
+        return list[math.random(1, #list)]
+    end
+    if q == "nearest" or q == "closest" then
+        local char = LocalPlayer.Character
+        local myHrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not myHrp then return nil end
+        local best, bestD
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                local d = (p.Character.HumanoidRootPart.Position - myHrp.Position).Magnitude
+                if not bestD or d < bestD then bestD = d; best = p end
+            end
+        end
+        return best
+    end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if string.lower(p.Name) == q or string.lower(p.DisplayName) == q then return p end
+    end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if string.find(string.lower(p.Name), q, 1, true)
+        or string.find(string.lower(p.DisplayName), q, 1, true) then
+            return p
+        end
+    end
+    return nil
+end
+
+function Library:RegisterTheme(name, theme)
+    if type(name) ~= "string" or type(theme) ~= "table" then return false end
+    THEMES[name] = theme
+    return true
+end
+
+function Library:Toast(text, duration)
+    self:Notify({ Title = tostring(text or ""), Duration = duration or 2 })
+end
+
+function Library:Confirm(opts, onYes, onNo)
+    opts = opts or {}
+    local gui = new("ScreenGui", {
+        Name = LIBRARY_CONFIG.StealthMode and randName(12) or "Library_Confirm",
+        ResetOnSpawn = false, IgnoreGuiInset = true,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 99997,
+    })
+    safeParent(gui)
+    local backdrop = new("Frame", {
+        Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(0,0,0),
+        BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 1,
+    }, gui)
+    local MW, MH = 400, 200
+    local modal = new("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(MW * 0.9, MH * 0.9), BackgroundColor3 = COLOR.BgDeep,
+        BorderSizePixel = 0, ClipsDescendants = true, ZIndex = 2,
+    }, gui)
+    corner(modal, 14)
+    stroke(modal, Color3.fromRGB(255,255,255), wA(0.1), 1)
+    addGlow(modal, 14)
+    if opts.Icon then
+        local iconBox = new("Frame", {
+            Position = UDim2.fromOffset(20, 20), Size = UDim2.fromOffset(32, 32),
+            BackgroundColor3 = Color3.fromRGB(255,255,255), BackgroundTransparency = wA(0.06),
+            BorderSizePixel = 0, ZIndex = 3,
+        }, modal)
+        corner(iconBox, 8)
+        stroke(iconBox, Color3.fromRGB(255,255,255), wA(0.12), 1)
+        applyIcon(iconBox, opts.Icon, 18, 0.85)
+    end
+    local titleX = opts.Icon and 64 or 20
+    new("TextLabel", {
+        Position = UDim2.fromOffset(titleX, 24), Size = UDim2.new(1, -titleX - 20, 0, 18),
+        BackgroundTransparency = 1, Text = opts.Title or "Confirm",
+        Font = Enum.Font.GothamBold, TextSize = 15, TextColor3 = COLOR.TextPrimary,
+        TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 3,
+    }, modal)
+    new("TextLabel", {
+        Position = UDim2.fromOffset(20, 70), Size = UDim2.new(1, -40, 0, 60),
+        BackgroundTransparency = 1, Text = opts.Content or opts.Message or "",
+        Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = Color3.fromRGB(255,255,255),
+        TextTransparency = wA(0.65), TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, ZIndex = 3,
+    }, modal)
+    local yes = new("TextButton", {
+        Position = UDim2.fromOffset(20, MH - 60), Size = UDim2.new(0.5, -25, 0, 36),
+        BackgroundColor3 = opts.DangerYes and COLOR.Danger or COLOR.Accent,
+        BackgroundTransparency = wA(1), BorderSizePixel = 0,
+        Text = opts.YesText or "Confirm", Font = Enum.Font.GothamBold, TextSize = 12,
+        TextColor3 = opts.DangerYes and COLOR.TextPrimary or COLOR.KnobOn,
+        AutoButtonColor = false, ZIndex = 3,
+    }, modal)
+    corner(yes, 8)
+    yes.MouseEnter:Connect(function() tween(yes, 0.15, { BackgroundTransparency = wA(0.85) }) end)
+    yes.MouseLeave:Connect(function() tween(yes, 0.15, { BackgroundTransparency = wA(1) }) end)
+    local no = new("TextButton", {
+        AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -20, 0, MH - 60),
+        Size = UDim2.new(0.5, -25, 0, 36), BackgroundColor3 = Color3.fromRGB(255,255,255),
+        BackgroundTransparency = 1, BorderSizePixel = 0,
+        Text = opts.NoText or "Cancel", Font = Enum.Font.GothamMedium, TextSize = 12,
+        TextColor3 = Color3.fromRGB(255,255,255), AutoButtonColor = false, ZIndex = 3,
+    }, modal)
+    corner(no, 8)
+    stroke(no, Color3.fromRGB(255,255,255), wA(0.1), 1)
+    no.MouseEnter:Connect(function() tween(no, 0.15, { BackgroundTransparency = wA(0.06) }) end)
+    no.MouseLeave:Connect(function() tween(no, 0.15, { BackgroundTransparency = 1 }) end)
+    tween(backdrop, 0.25, { BackgroundTransparency = 0.5 })
+    tween(modal, 0.35, { Size = UDim2.fromOffset(MW, MH) }, Enum.EasingStyle.Back)
+    local closed = false
+    local function closeWith(cb)
+        if closed then return end
+        closed = true
+        tween(backdrop, 0.25, { BackgroundTransparency = 1 })
+        tween(modal, 0.25, { Size = UDim2.fromOffset(MW * 0.9, MH * 0.9) }, Enum.EasingStyle.Quart)
+        task.delay(0.27, function() if gui then gui:Destroy() end if cb then pcall(cb) end end)
+    end
+    yes.MouseButton1Click:Connect(function() closeWith(onYes) end)
+    no.MouseButton1Click:Connect(function() closeWith(onNo) end)
+end
+
+function Library:HttpRequest(data)
+    if not exec.request then return nil, "no request function" end
+    local ok, res = pcall(exec.request, data)
+    if not ok then return nil, tostring(res) end
+    return res
 end
 
 function Library:SendWebhook(url, content, opts)
@@ -347,13 +671,8 @@ function Library:SendWebhook(url, content, opts)
         if content and not e.description then e.description = content end
         data.embeds = { e }
     end
-    local req = (syn and syn.request)
-        or (fluxus and fluxus.request)
-        or (http and http.request)
-        or rawget(_G, "http_request")
-        or rawget(_G, "request")
-    if not req then return false end
-    local ok, res = pcall(req, {
+    if not exec.request then return false end
+    local ok, res = pcall(exec.request, {
         Url = url, Method = "POST",
         Headers = { ["Content-Type"] = "application/json" },
         Body = HttpService:JSONEncode(data),
@@ -387,11 +706,10 @@ local notifGui
 local function getNotifGui()
     if notifGui and notifGui.Parent then return notifGui end
     notifGui = new("ScreenGui", {
-        Name = "Library_Notify", ResetOnSpawn = false,
+        Name = LIBRARY_CONFIG.StealthMode and randName(12) or "Library_Notify", ResetOnSpawn = false,
         IgnoreGuiInset = true, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 9999,
     })
-    pcall(function() notifGui.Parent = CoreGui end)
-    if not notifGui.Parent then notifGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+    safeParent(notifGui)
     local holder = new("Frame", {
         Name = "Holder", AnchorPoint = Vector2.new(1, 1),
         Position = UDim2.new(1, -20, 1, -20), Size = UDim2.fromOffset(340, 500),
@@ -475,14 +793,11 @@ end
 
 function Library:_showLoadingScreen(opts)
     opts = opts or {}
-    local existing = CoreGui:FindFirstChild("Library_Loading")
-    if existing then existing:Destroy() end
     local gui = new("ScreenGui", {
-        Name = "Library_Loading", ResetOnSpawn = false,
+        Name = LIBRARY_CONFIG.StealthMode and randName(12) or "Library_Loading", ResetOnSpawn = false,
         IgnoreGuiInset = true, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 99998,
     })
-    pcall(function() gui.Parent = CoreGui end)
-    if not gui.Parent then gui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+    safeParent(gui)
 
     local backdrop = new("Frame", {
         Size = UDim2.fromScale(1, 1),
@@ -575,14 +890,11 @@ function Library:_promptKey(opts, onSuccess, onCancel)
             for _, k in ipairs(keys) do if saved == k then onSuccess(); return end end
         end
     end
-    local existing = CoreGui:FindFirstChild("Library_Key")
-    if existing then existing:Destroy() end
     local gui = new("ScreenGui", {
-        Name = "Library_Key", ResetOnSpawn = false,
+        Name = LIBRARY_CONFIG.StealthMode and randName(12) or "Library_Key", ResetOnSpawn = false,
         IgnoreGuiInset = true, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 99999,
     })
-    pcall(function() gui.Parent = CoreGui end)
-    if not gui.Parent then gui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+    safeParent(gui)
 
     local backdrop = new("Frame", {
         Size = UDim2.fromScale(1, 1), Position = UDim2.fromScale(0, 0),
@@ -855,14 +1167,16 @@ function Library:CreateWindow(opts)
         safeMkdir(self.Config.FolderName .. "/Configs")
     end
 
-    local existing = CoreGui:FindFirstChild("Library_" .. self.Name)
-    if existing then existing:Destroy() end
+    if not LIBRARY_CONFIG.StealthMode then
+        local existing = CoreGui:FindFirstChild("Library_" .. self.Name)
+        if existing then existing:Destroy() end
+    end
     local gui = new("ScreenGui", {
-        Name = "Library_" .. self.Name, ResetOnSpawn = false,
+        Name = LIBRARY_CONFIG.StealthMode and randName(12) or ("Library_" .. self.Name),
+        ResetOnSpawn = false,
         IgnoreGuiInset = true, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 1000,
     })
-    pcall(function() gui.Parent = CoreGui end)
-    if not gui.Parent then gui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+    safeParent(gui)
     self.Gui = gui
 
     local WW, WH = 660, 420
@@ -1023,18 +1337,31 @@ function Library:CreateWindow(opts)
     self._resizeHandle = resizeHandle
 
     local resizing = false
-    local startSize, startInput
+    local startSize, startInput, lastSize
     resizeHandle.InputBegan:Connect(function(input)
         if input.UserInputType ~= Enum.UserInputType.MouseButton1
             and input.UserInputType ~= Enum.UserInputType.Touch then return end
         resizing = true
+        local absPos = window.AbsolutePosition
+        if window.AnchorPoint ~= Vector2.new(0, 0) then
+            window.AnchorPoint = Vector2.new(0, 0)
+            window.Position = UDim2.fromOffset(absPos.X, absPos.Y)
+        end
         startSize = Vector2.new(window.AbsoluteSize.X, window.AbsoluteSize.Y)
         startInput = input.Position
+        lastSize = startSize
     end)
     resizeHandle.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
             or input.UserInputType == Enum.UserInputType.Touch then
-            resizing = false
+            if resizing then
+                resizing = false
+                if lastSize then
+                    local newSize = UDim2.fromOffset(lastSize.X, lastSize.Y)
+                    self._normalSize = newSize
+                    self._currentSize = newSize
+                end
+            end
         end
     end)
     UserInputService.InputChanged:Connect(function(input)
@@ -1044,10 +1371,8 @@ function Library:CreateWindow(opts)
         local delta = input.Position - startInput
         local newW = math.clamp(startSize.X + delta.X, LIBRARY_CONFIG.ResizeMinWidth, LIBRARY_CONFIG.ResizeMaxWidth)
         local newH = math.clamp(startSize.Y + delta.Y, LIBRARY_CONFIG.ResizeMinHeight, LIBRARY_CONFIG.ResizeMaxHeight)
-        local newSize = UDim2.fromOffset(newW, newH)
-        window.Size = newSize
-        self._normalSize = newSize
-        self._currentSize = newSize
+        window.Size = UDim2.fromOffset(newW, newH)
+        lastSize = Vector2.new(newW, newH)
     end)
 
     local SBW = 140
@@ -1195,13 +1520,8 @@ function Library:CreateWindow(opts)
     end)
 
     table.insert(Library._windows, self)
+    if self.Config.Enabled then self:_preloadConfig() end
     self:_createSettingsTab()
-
-    if self.Config.Enabled then
-        task.delay(3, function()
-            if not self._destroyed then self:LoadConfig() end
-        end)
-    end
 
     return self
 end
@@ -1730,16 +2050,6 @@ function Window:CreateUITab(opts)
             end,
         })
         autoloadLabel = tab:CreateLabel("Current autoload config: " .. (readAutoload() or "none"))
-
-        local cur = readAutoload()
-        if cur and cur ~= "" then
-            task.delay(3.5, function()
-                if self._destroyed then return end
-                local orig = cfg.FileName
-                cfg.FileName = cur
-                self:LoadConfig()
-            end)
-        end
     end
 
     return tab
@@ -1986,6 +2296,16 @@ local function registerFlag(win, flag, element)
     if not flag then return end
     Library.Flags[flag] = element
     win.Flags[flag] = element.Value
+    if win._pendingConfigData and win._pendingConfigData[flag] ~= nil then
+        local value = win._pendingConfigData[flag]
+        win._loadingConfig = true
+        if type(value) == "table" and value._t == "Color3" then
+            pcall(function() element:Set(Color3.new(value.r, value.g, value.b)) end)
+        else
+            pcall(function() element:Set(value) end)
+        end
+        win._loadingConfig = false
+    end
 end
 local function updateFlag(win, flag, value) if flag then win.Flags[flag] = value end end
 
@@ -2026,12 +2346,14 @@ function Tab:CreateDivider()
 end
 
 function Tab:CreateToggle(opts)
+    opts = mergeDefaults(opts, "Toggle")
     local win = self._window
     local state = opts.CurrentValue or false
     local flag = opts.Flag
     local cb = opts.Callback or function() end
     local card = makeCard(self, 50)
     attachHover(card)
+    bindTooltip(card, opts.Tooltip)
     makeIconSquare(card, 28, opts.Icon)
     makeCardLabels(card, opts.Name or "Toggle", opts.Description)
     local w, h = 34, 19
@@ -2095,6 +2417,7 @@ function Tab:CreateToggle(opts)
 end
 
 function Tab:CreateSlider(opts)
+    opts = mergeDefaults(opts, "Slider")
     local win = self._window
     local range = opts.Range or {0, 100}
     local incr = opts.Increment or 1
@@ -2104,6 +2427,7 @@ function Tab:CreateSlider(opts)
     local cb = opts.Callback or function() end
     local card = makeCard(self, 50)
     attachHover(card)
+    bindTooltip(card, opts.Tooltip)
     makeIconSquare(card, 28, opts.Icon)
     new("TextLabel", {
         AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 51, 0.5, 0),
@@ -2205,9 +2529,13 @@ function Tab:CreateSlider(opts)
 end
 
 function Tab:CreateButton(opts)
+    opts = mergeDefaults(opts, "Button")
     local cb = opts.Callback or function() end
+    local copyValue = opts.CopyValue
+    local confirmMsg = opts.ConfirmMessage
     local card = makeCard(self, 38)
     attachHover(card)
+    bindTooltip(card, opts.Tooltip)
     local hasIcon = opts.Icon and opts.Icon ~= ""
     if hasIcon then makeIconSquare(card, 24, opts.Icon) end
     local label = new("TextLabel", {
@@ -2215,27 +2543,55 @@ function Tab:CreateButton(opts)
         Size = UDim2.new(1, hasIcon and -60 or -26, 1, 0),
         BackgroundTransparency = 1,
         Text = opts.Name or "Button", Font = Enum.Font.GothamMedium, TextSize = 12,
-        TextColor3 = COLOR.TextPrimary, TextXAlignment = Enum.TextXAlignment.Left,
+        TextColor3 = opts.TextColor or COLOR.TextPrimary, TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Center, ZIndex = 3,
     }, card)
+    if opts.TextGradient then applyTextGradient(label, opts.TextGradient) end
     local hit = new("TextButton", {
         Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
         Text = "", AutoButtonColor = false, ZIndex = 5,
     }, card)
     hit.MouseButton1Down:Connect(function() tween(card, 0.08, { BackgroundTransparency = wA(0.1) }) end)
     hit.MouseButton1Up:Connect(function() tween(card, 0.15, { BackgroundTransparency = wA(0.05) }) end)
-    hit.MouseButton1Click:Connect(function()
+    local function run()
         local ok, err = pcall(cb)
         if not ok then warn("[Library] Button error: " .. tostring(err)) end
+        if copyValue then
+            local val = type(copyValue) == "function" and copyValue() or copyValue
+            if Library:CopyToClipboard(val) then
+                Library:Notify({Title = "Copied", Image = "clipboard-check", Type = "success",
+                    Content = (opts.Name or "Value") .. " copied to clipboard.", Duration = 2})
+            else
+                Library:Notify({Title = "Failed", Image = "x", Type = "error",
+                    Content = "Your executor does not support clipboard.", Duration = 2})
+            end
+        end
+    end
+    hit.MouseButton1Click:Connect(function()
+        if confirmMsg then
+            Library:Confirm({
+                Title = opts.ConfirmTitle or "Are you sure?",
+                Content = confirmMsg, Icon = opts.ConfirmIcon or opts.Icon,
+                YesText = opts.ConfirmYes or "Yes",
+                NoText = opts.ConfirmNo or "Cancel",
+                DangerYes = opts.ConfirmDanger,
+            }, run)
+        else
+            run()
+        end
     end)
     return {
         Type = "Button",
         Set = function(_, n) label.Text = n end,
+        SetCallback = function(_, f) cb = f or function() end end,
+        SetCopyValue = function(_, v) copyValue = v end,
+        Fire = run,
         Destroy = function() card:Destroy() end,
     }
 end
 
 function Tab:CreateDropdown(opts)
+    opts = mergeDefaults(opts, "Dropdown")
     local win = self._window
     local options = opts.Options or {}
     local multi = opts.MultipleOptions == true
@@ -2251,6 +2607,7 @@ function Tab:CreateDropdown(opts)
     local cb = opts.Callback or function() end
     local card = makeCard(self, 50)
     attachHover(card)
+    bindTooltip(card, opts.Tooltip)
     makeIconSquare(card, 28, opts.Icon)
     makeCardLabels(card, opts.Name or "Dropdown", opts.Description)
     local trigger = new("TextButton", {
@@ -2390,12 +2747,14 @@ function Tab:CreateDropdown(opts)
 end
 
 function Tab:CreateInput(opts)
+    opts = mergeDefaults(opts, "Input")
     local win = self._window
     local value = opts.CurrentValue or ""
     local flag = opts.Flag
     local cb = opts.Callback or function() end
     local card = makeCard(self, 50)
     attachHover(card)
+    bindTooltip(card, opts.Tooltip)
     makeIconSquare(card, 28, opts.Icon)
     makeCardLabels(card, opts.Name or "Input", opts.Description)
     local frame = new("Frame", {
@@ -2434,6 +2793,7 @@ function Tab:CreateInput(opts)
 end
 
 function Tab:CreateKeybind(opts)
+    opts = mergeDefaults(opts, "Keybind")
     local win = self._window
     local current = opts.CurrentKeybind or "None"
     local flag = opts.Flag
@@ -2442,6 +2802,7 @@ function Tab:CreateKeybind(opts)
     local callOnChange = opts.CallOnChange
     local card = makeCard(self, 50)
     attachHover(card)
+    bindTooltip(card, opts.Tooltip)
     makeIconSquare(card, 28, opts.Icon)
     makeCardLabels(card, opts.Name or "Keybind", opts.Description)
     local btn = new("TextButton", {
@@ -2497,25 +2858,56 @@ function Tab:CreateKeybind(opts)
     return element
 end
 
-function Tab:CreateLabel(text, icon, color)
+function Tab:CreateLabel(text, icon, color, interval)
+    local gradient, tooltip
+    if type(text) == "table" then
+        local opts = mergeDefaults(text, "Label")
+        text = opts.Text; icon = opts.Icon; color = opts.Color or opts.TextColor
+        interval = opts.RefreshInterval
+        gradient = opts.TextGradient
+        tooltip = opts.Tooltip
+    end
+    local resolver
+    if type(text) == "function" then resolver = text; text = tostring(resolver()) end
     local card = makeCard(self, 32)
+    if tooltip then bindTooltip(card, tooltip) end
     if icon then makeIconSquare(card, 22, icon) end
     local lbl = new("TextLabel", {
         AnchorPoint = Vector2.new(0, 0.5),
         Position = UDim2.new(0, icon and 42 or 13, 0.5, 0),
         Size = UDim2.new(1, icon and -55 or -26, 1, 0),
-        BackgroundTransparency = 1, Text = text,
+        BackgroundTransparency = 1, Text = tostring(text or ""),
         Font = Enum.Font.GothamMedium, TextSize = 11,
         TextColor3 = color or Color3.fromRGB(255,255,255), TextTransparency = wA(0.7),
         TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 3,
     }, card)
+    if gradient then applyTextGradient(lbl, gradient) end
+    local destroyed = false
+    if resolver and interval and interval > 0 then
+        task.spawn(function()
+            while not destroyed and card.Parent do
+                task.wait(interval)
+                if destroyed or not card.Parent then break end
+                local ok, val = pcall(resolver)
+                if ok then lbl.Text = tostring(val) end
+            end
+        end)
+    end
     return {
         Type = "Label",
         Set = function(_, t, c)
-            lbl.Text = t
+            if type(t) == "function" then resolver = t; t = tostring(resolver()) end
+            lbl.Text = tostring(t)
             if c then lbl.TextColor3 = c end
         end,
-        Destroy = function() card:Destroy() end,
+        Get = function() return lbl.Text end,
+        Refresh = function()
+            if resolver then
+                local ok, val = pcall(resolver)
+                if ok then lbl.Text = tostring(val) end
+            end
+        end,
+        Destroy = function() destroyed = true; card:Destroy() end,
     }
 end
 
@@ -2552,12 +2944,14 @@ function Tab:CreateParagraph(opts)
 end
 
 function Tab:CreateColorPicker(opts)
+    opts = mergeDefaults(opts, "ColorPicker")
     local win = self._window
     local startColor = opts.Color or Color3.fromRGB(255, 255, 255)
     local flag = opts.Flag
     local cb = opts.Callback or function() end
     local card = makeCard(self, 50)
     attachHover(card)
+    bindTooltip(card, opts.Tooltip)
     makeIconSquare(card, 28, opts.Icon)
     makeCardLabels(card, opts.Name or "Color", opts.Description)
     local swatch = new("TextButton", {
@@ -2732,8 +3126,9 @@ function Window:SetStatus(opts)
         AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 36, 0.5, 7),
         Size = UDim2.fromOffset(220, 14), BackgroundTransparency = 1,
         Text = opts.Label or "Idle", Font = Enum.Font.GothamMedium, TextSize = 12,
-        TextColor3 = COLOR.TextPrimary, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 9,
+        TextColor3 = opts.LabelColor or COLOR.TextPrimary, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 9,
     }, row)
+    if opts.LabelGradient then applyTextGradient(labelLbl, opts.LabelGradient) end
     local rightLbl = new("TextLabel", {
         AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -13, 0.5, 0),
         Size = UDim2.fromOffset(280, 14), BackgroundTransparency = 1,
@@ -2772,6 +3167,8 @@ end
 function Window:SaveConfig()
     if not self.Config.Enabled then return end
     if self._loadingConfig then return end
+    safeMkdir(self.Config.FolderName)
+    safeMkdir(self.Config.FolderName .. "/Configs")
     local data = {}
     for flag, value in pairs(self.Flags) do
         if typeof(value) == "Color3" then
@@ -2784,6 +3181,19 @@ function Window:SaveConfig()
     safeWrite(path, HttpService:JSONEncode(data))
 end
 
+function Window:_preloadConfig()
+    if not self.Config.Enabled then return end
+    local autoloadPath = self.Config.FolderName .. "/autoload.txt"
+    local autoload = safeRead(autoloadPath)
+    if autoload and autoload ~= "" then self.Config.FileName = autoload end
+    local path = self.Config.FolderName .. "/Configs/" .. self.Config.FileName .. ".json"
+    local raw = safeRead(path)
+    if not raw then return end
+    local ok, data = pcall(function() return HttpService:JSONDecode(raw) end)
+    if not ok or type(data) ~= "table" then return end
+    self._pendingConfigData = data
+end
+
 function Window:LoadConfig()
     if not self.Config.Enabled then return end
     local path = self.Config.FolderName .. "/Configs/" .. self.Config.FileName .. ".json"
@@ -2791,6 +3201,7 @@ function Window:LoadConfig()
     if not raw then return end
     local ok, data = pcall(function() return HttpService:JSONDecode(raw) end)
     if not ok or type(data) ~= "table" then return end
+    self._pendingConfigData = data
     self._loadingConfig = true
     for flag, value in pairs(data) do
         local element = Library.Flags[flag]
