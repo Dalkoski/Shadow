@@ -1,6 +1,6 @@
 --[[
 	╔══════════════════════════════════════════════════════════╗
-	║                    VaenHub v3.3                          ║
+	║                    VaenHub v3.4                          ║
 	║       Final polish + spec fixes — by Dalkoski            ║
 	╚══════════════════════════════════════════════════════════╝
 ]]
@@ -48,7 +48,7 @@ local RADIUS = 8
 --==============================================================
 -- ROOT + FORWARD DECLS
 --==============================================================
-local VaenHub = { Version = "3.3.0", Flags = {}, Windows = {} }
+local VaenHub = { Version = "3.4.0", Flags = {}, Windows = {} }
 local Window = {}
 local Tab = {}
 local Elem = {}
@@ -157,7 +157,7 @@ function VaenHub:CreateWindow(cfg)
 		_protect = cfg.Protect or {},
 		_configSave = cfg.Config or {},
 		_name = cfg.Name or "VaenHub",
-		_version = cfg.Version or "v3.3",
+		_version = cfg.Version or "v3.4",
 		_currentTab = nil,
 		_tabOrder = 0,
 	}, {__index = Window})
@@ -669,22 +669,16 @@ function VaenHub:_BuildWindow(win)
 		BackgroundColor3 = Color3.fromRGB(15, 13, 25),
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
+		ZIndex = 1,
 	}, gui)
 	corner(main, 12)
 	stroke(main, Color3.fromRGB(255,255,255), 0.9)
 
-	-- Gradient texture overlay (ImageLabel method, not UIGradient)
-	local bgImage = new("ImageLabel", {
-		Name = "BgGradient",
-		Size = UDim2.fromScale(1, 1),
-		BackgroundTransparency = 1,
-		Image = "rbxassetid://4998051433",
-		ImageColor3 = Color3.fromRGB(38, 32, 64),
-		ImageTransparency = 0.8,
-		ScaleType = Enum.ScaleType.Stretch,
-		ZIndex = 1,
+	-- 45deg purple gradient per spec
+	new("UIGradient", {
+		Color = ColorSequence.new(Color3.fromRGB(26, 21, 48), Color3.fromRGB(10, 8, 18)),
+		Rotation = 45,
 	}, main)
-	corner(bgImage, 12)
 
 	win._main = main
 
