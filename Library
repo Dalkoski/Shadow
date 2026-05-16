@@ -1,6 +1,6 @@
 --[[
 	╔══════════════════════════════════════════════════════════╗
-	║                    VaenHub v2.9                          ║
+	║                    VaenHub v3.0                          ║
 	║       Final polish + spec fixes — by Dalkoski            ║
 	╚══════════════════════════════════════════════════════════╝
 ]]
@@ -48,7 +48,7 @@ local RADIUS = 8
 --==============================================================
 -- ROOT + FORWARD DECLS
 --==============================================================
-local VaenHub = { Version = "2.9.0", Flags = {}, Windows = {} }
+local VaenHub = { Version = "3.0.0", Flags = {}, Windows = {} }
 local Window = {}
 local Tab = {}
 local Elem = {}
@@ -124,6 +124,22 @@ local GLYPHS = {
 	timer     = "⧗",
 }
 
+-- Lucide-style icon asset IDs (community-uploaded, no dev account needed)
+local LUCIDE = {
+	bolt    = "rbxassetid://10734950309",  -- lightning bolt → Main
+	user    = "rbxassetid://10747373183",  -- person → Player
+	eye     = "rbxassetid://10723345518",  -- eye → Visuals
+	shield  = "rbxassetid://10723346957",  -- shield → Protect
+	flame   = "rbxassetid://10734898355",  -- flame
+	target  = "rbxassetid://10734977449",  -- crosshair
+	chevron = "rbxassetid://10734894900",  -- chevron-down
+	arrow   = "rbxassetid://10734895698",  -- chevron-right
+	search  = "rbxassetid://10747384394",  -- search
+	cog     = "rbxassetid://10734924532",  -- settings cog
+	x       = "rbxassetid://10747375965",  -- close X
+	minus   = "rbxassetid://10734916534",  -- minus dash
+}
+
 --==============================================================
 -- PUBLIC API
 --==============================================================
@@ -141,7 +157,7 @@ function VaenHub:CreateWindow(cfg)
 		_protect = cfg.Protect or {},
 		_configSave = cfg.Config or {},
 		_name = cfg.Name or "VaenHub",
-		_version = cfg.Version or "v2.9",
+		_version = cfg.Version or "v3.0",
 		_currentTab = nil,
 		_tabOrder = 0,
 	}, {__index = Window})
@@ -631,20 +647,20 @@ function VaenHub:_BuildWindow(win)
 	}, gui)
 	corner(main, 12)
 	stroke(main, Color3.fromRGB(255,255,255), 0.9)
-	gradient(main, Color3.fromRGB(12, 10, 20), Color3.fromRGB(24, 18, 38), 90)
+	gradient(main, Color3.fromRGB(16, 14, 26), Color3.fromRGB(24, 18, 38), 90)
 	win._main = main
 
-	-- Phantom V watermark
+	-- VaenHub V watermark (subtle background mark)
 	new("TextLabel", {
-		Size = UDim2.fromOffset(280, 280),
+		Size = UDim2.fromOffset(320, 320),
 		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, 30, 1, 30),
+		Position = UDim2.new(1, 40, 1, 40),
 		BackgroundTransparency = 1,
 		Text = "V",
 		Font = Enum.Font.GothamBold,
-		TextSize = 280,
-		TextColor3 = Color3.fromRGB(255,255,255),
-		TextTransparency = 0.96,
+		TextSize = 320,
+		TextColor3 = Color3.fromRGB(255, 255, 255),
+		TextTransparency = 0.95,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		TextYAlignment = Enum.TextYAlignment.Bottom,
 		ZIndex = 0,
@@ -724,48 +740,15 @@ function VaenHub:_BuildWindow(win)
 		badge.Visible = true
 	end)
 
-	-- Topbar buttons
-	-- Text-based icons using characters Gotham renders reliably.
-	-- No ImageRectOffset guessing, no broken sprite sheets.
-	local function topBtn(name, char, xOff, size)
-		local b = new("TextButton", {
-			Name = name,
-			Size = UDim2.fromOffset(24, 24),
-			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, xOff, 0.5, 0),
-			BackgroundTransparency = 1,
-			Text = char,
-			Font = Enum.Font.GothamBold,
-			TextSize = size or 16,
-			TextColor3 = THEME.TextDim,
-			AutoButtonColor = false,
-		}, topbar)
-		b.MouseEnter:Connect(function() tween(b, 0.15, {TextColor3 = THEME.Text}) end)
-		b.MouseLeave:Connect(function() tween(b, 0.15, {TextColor3 = THEME.TextDim}) end)
-		return b
-	end
-
-	-- Standard ASCII characters that render reliably in Gotham
-	local searchBtn = topBtn("Search",   "?",  -110, 14)  -- placeholder for search
-	local cogBtn    = topBtn("Settings", "*",  -82,  18)  -- placeholder for cog
-	local miniBtn   = topBtn("Mini",     "-",  -54,  22)  -- dash
-	local closeBtn  = topBtn("Close",    "x",  -14,  14)  -- close
-
-	-- Actually, let's use icons that LOOK right: text characters that align with the mockup
-	searchBtn.Text = "Q"  -- We'll use a real magnifying glass below
-
-	-- Use ImageLabel for search and cog from Lucide-style asset IDs (these are real, working Roblox UI sprites)
-	searchBtn:Destroy()
-	cogBtn:Destroy()
-
-	local function topImgBtn(name, asset, xOff)
+	-- Topbar buttons — ImageButton with LUCIDE assets
+	local function topImgBtn(name, assetId, xOff)
 		local b = new("ImageButton", {
 			Name = name,
-			Size = UDim2.fromOffset(18, 18),
+			Size = UDim2.fromOffset(20, 20),
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, xOff, 0.5, 0),
 			BackgroundTransparency = 1,
-			Image = asset,
+			Image = assetId,
 			ImageColor3 = THEME.TextDim,
 			AutoButtonColor = false,
 		}, topbar)
@@ -774,9 +757,11 @@ function VaenHub:_BuildWindow(win)
 		return b
 	end
 
-	-- These are the official Roblox CoreGui icons that ship with every client
-	searchBtn = topImgBtn("Search",   "rbxasset://textures/ui/Settings/Help/SearchIcon.png",   -110)
-	cogBtn    = topImgBtn("Settings", "rbxasset://textures/ui/Settings/MenuBarIcons/GameSettingsTab.png", -82)
+	-- Right-to-left: Close, Minimize, Settings, Search
+	local closeBtn  = topImgBtn("Close",    LUCIDE.x,      -14)
+	local miniBtn   = topImgBtn("Mini",     LUCIDE.minus,  -44)
+	local cogBtn    = topImgBtn("Settings", LUCIDE.cog,    -74)
+	local searchBtn = topImgBtn("Search",   LUCIDE.search, -104)
 
 	closeBtn.MouseButton1Click:Connect(function() win:Destroy() end)
 	miniBtn.MouseButton1Click:Connect(function() win:Minimise() end)
@@ -844,10 +829,11 @@ end
 function VaenHub:_BuildTab(win, t)
 	win._tabOrder = win._tabOrder + 1
 
-	-- Calculate label width manually to avoid AutomaticSize chaining issues
-	local hasIcon = t._icon and (GLYPHS[t._icon] or (type(t._icon) == "string" and (t._icon:match("^rbxasset") or t._icon:match("^%d+$"))))
-	local approxTextWidth = #t._name * 7  -- ~7px per char at GothamMedium 12
-	local btnWidth = 24 + approxTextWidth + (hasIcon and 22 or 0)
+	-- Calculate label width manually
+	local iconStrForWidth = tostring(t._icon or "")
+	local hasIcon = t._icon and (LUCIDE[iconStrForWidth] or GLYPHS[iconStrForWidth] or iconStrForWidth:match("^rbxasset") or iconStrForWidth:match("^%d+$"))
+	local approxTextWidth = #t._name * 7
+	local btnWidth = 24 + approxTextWidth + (hasIcon and 24 or 0)
 
 	-- Tab pill — INACTIVE by default (transparent). _SelectTab will set active state instantly.
 	local btn = new("Frame", {
@@ -865,28 +851,42 @@ function VaenHub:_BuildTab(win, t)
 	-- No gradient overlay on tabs (keeps active fill solid violet per spec)
 	local btnStroke = nil
 
-	-- Icon (text glyph OR image asset) — explicit positioning, no auto-size chaining
+	-- Icon resolution: LUCIDE dict → raw asset path → glyph fallback
 	local iconLbl
 	local labelX = 12
 	if t._icon then
-		if type(t._icon) == "string" and (t._icon:match("^rbxasset") or t._icon:match("^%d+$") or t._icon:match("^rbxassetid")) then
-			local src = (t._icon:match("^rbxasset") or t._icon:match("^rbxassetid")) and t._icon or ("rbxassetid://" .. t._icon)
+		local iconStr = tostring(t._icon)
+		-- Priority 1: Lucide dictionary lookup (e.g. "bolt", "user", "eye", "shield")
+		if LUCIDE[iconStr] then
 			iconLbl = new("ImageLabel", {
 				AnchorPoint = Vector2.new(0, 0.5),
-				Size = UDim2.fromOffset(14, 14),
+				Size = UDim2.fromOffset(16, 16),
+				Position = UDim2.new(0, 12, 0.5, 0),
+				BackgroundTransparency = 1,
+				Image = LUCIDE[iconStr],
+				ImageColor3 = Color3.fromRGB(140, 140, 155),
+			}, btn)
+			labelX = 34
+		-- Priority 2: raw asset path
+		elseif iconStr:match("^rbxasset") or iconStr:match("^rbxassetid") or iconStr:match("^%d+$") then
+			local src = (iconStr:match("^rbxasset") or iconStr:match("^rbxassetid")) and iconStr or ("rbxassetid://" .. iconStr)
+			iconLbl = new("ImageLabel", {
+				AnchorPoint = Vector2.new(0, 0.5),
+				Size = UDim2.fromOffset(16, 16),
 				Position = UDim2.new(0, 12, 0.5, 0),
 				BackgroundTransparency = 1,
 				Image = src,
 				ImageColor3 = Color3.fromRGB(140, 140, 155),
 			}, btn)
-			labelX = 32
-		elseif GLYPHS[t._icon] then
+			labelX = 34
+		-- Priority 3: glyph fallback
+		elseif GLYPHS[iconStr] then
 			iconLbl = new("TextLabel", {
 				AnchorPoint = Vector2.new(0, 0.5),
 				Size = UDim2.fromOffset(14, 28),
 				Position = UDim2.new(0, 12, 0.5, 0),
 				BackgroundTransparency = 1,
-				Text = GLYPHS[t._icon],
+				Text = GLYPHS[iconStr],
 				Font = Enum.Font.GothamBold,
 				TextSize = 13,
 				TextColor3 = Color3.fromRGB(140, 140, 155),
@@ -1020,10 +1020,15 @@ local function addIcon(frame, iconID)
 	local glyphText = nil
 
 	if type(iconID) == "string" then
-		if iconID:match("^rbxasset://") or iconID:match("^rbxassetid://") then
+		-- Priority 1: LUCIDE dictionary
+		if LUCIDE[iconID] then
+			imageSource = LUCIDE[iconID]
+		-- Priority 2: raw asset path
+		elseif iconID:match("^rbxasset://") or iconID:match("^rbxassetid://") then
 			imageSource = iconID
 		elseif iconID:match("^%d+$") then
 			imageSource = "rbxassetid://" .. iconID
+		-- Priority 3: glyph fallback
 		elseif GLYPHS[iconID] then
 			glyphText = GLYPHS[iconID]
 		end
@@ -1032,7 +1037,7 @@ local function addIcon(frame, iconID)
 	if imageSource then
 		local img = new("ImageLabel", {
 			AnchorPoint = Vector2.new(0, 0.5),
-			Size = UDim2.fromOffset(20, 20),
+			Size = UDim2.fromOffset(18, 18),
 			Position = UDim2.new(0, 14, 0.5, 0),
 			BackgroundTransparency = 1,
 			Image = imageSource,
